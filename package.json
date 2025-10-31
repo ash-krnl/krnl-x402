@@ -1,0 +1,27 @@
+{
+  "name": "krnl-x402",
+  "version": "1.0.0",
+  "description": "High-performance x402 payment verification server",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "tsx watch index.ts",
+    "start": "tsx index.ts",
+    "build": "tsc",
+    "serve": "node dist/index.js"
+  },
+  "keywords": ["x402", "payment", "verification", "fastify"],
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "x402": "^0.7.0",
+    "axios": "^1.7.2",
+    "viem": "^2.21.26"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
