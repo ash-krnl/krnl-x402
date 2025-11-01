@@ -24,6 +24,9 @@ interface DelegationResult {
 
 /**
  * Check if an address is already delegated to KRNL
+ * 
+ * EIP-7702 sets code to: 0xef0100 || delegateAddress (20 bytes)
+ * Example: 0xef0100bdba7f921f8c8aff014749fc17324e832291bfb0
  */
 async function isDelegated(
   address: Address,
@@ -39,17 +42,31 @@ async function isDelegated(
     // Get the account's code
     const code = await publicClient.getCode({ address });
     
-    // If code exists and matches delegation pattern, it's delegated
-    // EIP-7702 sets code to 0xef0100 + delegateAddress
-    if (code && code.length > 2) {
-      const codeStr = code.toLowerCase();
-      const delegateStr = delegateAddress.toLowerCase().replace('0x', '');
-      
-      // Check if code contains the delegate address
-      return codeStr.includes(delegateStr);
+    if (!code || code === '0x') {
+      return false; // No code = not delegated
     }
     
-    return false;
+    // Check for EIP-7702 delegation marker
+    // Format: 0xef0100 (3 bytes) + delegateAddress (20 bytes) = 23 bytes total (46 hex chars + 0x)
+    const EIP7702_PREFIX = '0xef0100';
+    
+    if (!code.toLowerCase().startsWith(EIP7702_PREFIX)) {
+      return false; // Not an EIP-7702 delegation
+    }
+    
+    // Extract the delegated contract address (skip 0xef0100)
+    const delegatedTo = '0x' + code.slice(8); // Skip '0xef0100', keep remaining 20 bytes
+    
+    // Check if delegated to the expected KRNL contract
+    const isDelegatedToKRNL = delegatedTo.toLowerCase() === delegateAddress.toLowerCase();
+    
+    if (isDelegatedToKRNL) {
+      console.log(`   ✅ Account is delegated to: ${delegatedTo}`);
+    } else {
+      console.log(`   ⚠️  Account is delegated to: ${delegatedTo} (not KRNL)`);
+    }
+    
+    return isDelegatedToKRNL;
   } catch (error) {
     console.error('Error checking delegation status:', error);
     return false;
@@ -136,6 +153,7 @@ async function delegateToKRNL(config: DelegationConfig): Promise<DelegationResul
     console.log(`   Signing authorization for delegate: ${delegateAddress}`);
     const authorization = await walletClient.signAuthorization({
       contractAddress: delegateAddress,
+      executor: 'self', // ✅ Indicates self-execution, Viem handles nonce adjustment
     });
 
     console.log('   Authorization signed successfully');
