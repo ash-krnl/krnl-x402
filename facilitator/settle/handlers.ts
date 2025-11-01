@@ -3,9 +3,9 @@ import type {
   PaymentPayload,
   PaymentRequirements,
   SettleResponse,
-} from 'x402/types';
-import { settle } from 'x402/facilitator';
-import { createSigner } from 'x402/types';
+} from '../../x402/typescript/packages/x402/src/types/index';
+import { settle } from '../../x402/typescript/packages/x402/src/facilitator/index';
+import { createSigner } from '../../x402/typescript/packages/x402/src/types/index';
 import { getWorkflowByNonce } from '../../lib/workflow-store';
 import { createKRNLClient } from '../../lib/krnl-client';
 import { createKRNLX402Config } from '../../middleware/krnl-x402';

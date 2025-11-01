@@ -1,60 +1,96 @@
 import type { WorkflowDSL, WorkflowStep } from './krnl-client';
-import type { PaymentPayload, PaymentRequirements } from 'x402/types';
+import type { PaymentPayload, PaymentRequirements } from '../x402/typescript/packages/x402/src/types/index';
+import { keccak256, encodePacked, type Hex, type Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
-// Helper to safely stringify with circular reference handling
-function safeStringify(obj: any): string {
-  try {
-    return JSON.stringify(obj);
-  } catch (error) {
-    return String(obj);
-  }
+/**
+ * Sign a transaction intent for KRNL workflow execution
+ * Matches the frontend pattern from KRNL SDK
+ */
+async function signTransactionIntent(
+  intentId: Hex,
+  sender: Address,
+  target: Address,
+  delegate: Address,
+  deadline: bigint,
+  privateKey: Hex
+): Promise<Hex> {
+  const account = privateKeyToAccount(privateKey);
+  
+  // EIP-712 domain for KRNL transaction intents
+  const domain = {
+    name: 'KRNL',
+    version: '1',
+    chainId: 11155111, // Sepolia
+  } as const;
+  
+  // Transaction intent type
+  const types = {
+    TransactionIntent: [
+      { name: 'id', type: 'bytes32' },
+      { name: 'sender', type: 'address' },
+      { name: 'target', type: 'address' },
+      { name: 'delegate', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+  } as const;
+  
+  // Sign the transaction intent
+  const signature = await account.signTypedData({
+    domain,
+    types,
+    primaryType: 'TransactionIntent',
+    message: {
+      id: intentId,
+      sender,
+      target,
+      delegate,
+      deadline,
+    },
+  });
+  
+  return signature;
 }
 
 export interface X402WorkflowParams {
   paymentPayload: PaymentPayload;
   paymentRequirements: PaymentRequirements;
-  sender: string;
-  delegate: string;
-  chainId: number;
-  facilitatorUrl: string;
-  targetContract?: string;
-  attestorImage: string;
-  rpcUrl: string;
-  bundlerUrl?: string;
-  paymasterUrl?: string;
+  targetContractAddress: string; // X402Target contract address
+  delegateAddress: string; // KRNL node delegate address
+  attestorImage: string; // Docker attestor image
+  facilitatorUrl: string; // Facilitator URL
+  rpcUrl: string; // RPC endpoint
+  bundlerUrl?: string; // Optional bundler URL
+  paymasterUrl?: string; // Optional paymaster URL
+  privateKey?: string; // Private key for signing transaction intent
 }
 
 /**
- * Build KRNL workflow DSL for atomic x402 verify + settle
+ * Build KRNL workflow DSL for x402 payment settlement
  * 
- * This creates a workflow that:
- * 1. Calls /verify endpoint to validate payment
- * 2. If valid, atomically settles on-chain
- * 3. Returns combined result
+ * Workflow:
+ * 1. Call /verify endpoint to validate payment
+ * 2. Encode PaymentParams struct for the target contract
+ * 3. Call X402Target.executePayment() with encoded data
+ * 
+ * @param params Payment payload and requirements
+ * @returns KRNL workflow DSL with signed transaction intent
  */
-export function buildX402VerifySettleWorkflow(params: X402WorkflowParams): WorkflowDSL {
+export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams): Promise<WorkflowDSL> {
   const {
     paymentPayload,
     paymentRequirements,
-    sender,
-    delegate,
-    chainId,
-    facilitatorUrl,
-    targetContract,
-    attestorImage,
-    rpcUrl,
-    bundlerUrl,
-    paymasterUrl,
+    targetContractAddress,
   } = params;
 
-  // Step 1: Call verify endpoint
+  // Step 1: Call facilitator /verify endpoint
   const verifyStep: WorkflowStep = {
     name: 'x402-verify-payment',
     image: 'ghcr.io/krnl-labs/executor-http@sha256:07ef35b261014304a0163502a7f1dec5395c5cac1fc381dc1f79b052389ab0d5',
-    attestor: attestorImage,
-    next: 'x402-check-validity',
+    attestor: params.attestorImage,
+    next: 'x402-encode-payment-params',
     inputs: {
-      url: `${facilitatorUrl}/facilitator/verify`,
+      url: `${params.facilitatorUrl}/verify`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -90,16 +126,46 @@ export function buildX402VerifySettleWorkflow(params: X402WorkflowParams): Workf
     ],
   };
 
-  // Step 2: Conditional check - only proceed if valid
-  const checkValidityStep: WorkflowStep = {
-    name: 'x402-check-validity',
-    image: 'ghcr.io/krnl-labs/executor-conditional@sha256:placeholder', // Use actual conditional executor
-    attestor: attestorImage,
-    next: 'x402-settle-payment',
+  // Extract payment authorization from payload
+  const payload = paymentPayload.payload as any;
+  const authorization = payload.authorization;
+  const signature = payload.signature;
+
+  // Step 2: Encode PaymentParams struct for X402Target contract
+  // Fields must be in alphabetical order: from, nonce, signature, to, validAfter, validBefore, value
+  const encodePaymentParamsStep: WorkflowStep = {
+    name: 'x402-encode-payment-params',
+    image: 'ghcr.io/krnl-labs/executor-encoder-evm@sha256:b28823d12eb1b16cbcc34c751302cd2dbe7e35480a5bc20e4e7ad50a059b6611',
+    attestor: params.attestorImage,
+    config: {
+      parameters: [
+        {
+          name: 'paymentParams',
+          type: 'tuple',
+          components: [
+            { name: 'from', type: 'address' },
+            { name: 'nonce', type: 'bytes32' },
+            { name: 'signature', type: 'bytes' },
+            { name: 'to', type: 'address' },
+            { name: 'validAfter', type: 'uint256' },
+            { name: 'validBefore', type: 'uint256' },
+            { name: 'value', type: 'uint256' },
+          ],
+        },
+      ],
+    },
     inputs: {
-      condition: '${x402-verify-payment.isValid} == true',
-      onTrue: 'x402-settle-payment',
-      onFalse: 'x402-return-invalid',
+      value: {
+        paymentParams: {
+          from: authorization.from,
+          nonce: authorization.nonce,
+          signature: signature,
+          to: authorization.to,
+          validAfter: authorization.validAfter.toString(),
+          validBefore: authorization.validBefore.toString(),
+          value: authorization.value.toString(),
+        },
+      },
     },
     outputs: [
       {
@@ -111,190 +177,82 @@ export function buildX402VerifySettleWorkflow(params: X402WorkflowParams): Workf
     ],
   };
 
-  // Step 3: Settle payment on-chain (only if valid)
-  const settleStep: WorkflowStep = {
-    name: 'x402-settle-payment',
-    image: 'ghcr.io/krnl-labs/executor-evm-transaction@sha256:placeholder', // Use actual EVM executor
-    attestor: attestorImage,
-    next: 'x402-confirm-settlement',
-    inputs: {
-      network: paymentRequirements.network,
-      paymentPayload: JSON.stringify(paymentPayload),
-      paymentRequirements: JSON.stringify(paymentRequirements),
-      privateKey: '${_SECRETS.PRIVATE_KEY}', // From KRNL secrets
-    },
-    outputs: [
-      {
-        name: 'transactionHash',
-        value: 'transaction.hash',
-        type: 'string',
-        required: true,
-        export: true,
-      },
-      {
-        name: 'success',
-        value: 'transaction.success',
-        type: 'boolean',
-        required: true,
-        export: true,
-      },
-    ],
+  // Map network names to chain IDs and Pimlico network slugs
+  const networkConfig: Record<string, { chainId: number; pimlicoSlug: string }> = {
+    'sepolia': { chainId: 11155111, pimlicoSlug: 'sepolia' },
+    'ethereum-sepolia': { chainId: 11155111, pimlicoSlug: 'sepolia' },
+    'base-sepolia': { chainId: 84532, pimlicoSlug: 'base-sepolia' },
+    'optimism-sepolia': { chainId: 11155420, pimlicoSlug: 'optimism-sepolia' },
+    'arbitrum-sepolia': { chainId: 421614, pimlicoSlug: 'arbitrum-sepolia' },
   };
 
-  // Step 4: Confirm settlement
-  const confirmSettlementStep: WorkflowStep = {
-    name: 'x402-confirm-settlement',
-    image: 'ghcr.io/krnl-labs/executor-http@sha256:07ef35b261014304a0163502a7f1dec5395c5cac1fc381dc1f79b052389ab0d5',
-    attestor: attestorImage,
-    inputs: {
-      url: `${facilitatorUrl}/facilitator/settlement-status`,
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      params: {
-        transactionHash: '${x402-settle-payment.transactionHash}',
-        network: paymentRequirements.network,
-      },
-      timeout: 30,
-    },
-    outputs: [
-      {
-        name: 'confirmed',
-        value: 'response.body.confirmed',
-        type: 'boolean',
-        required: true,
-        export: true,
-      },
-      {
-        name: 'blockNumber',
-        value: 'response.body.blockNumber',
-        type: 'number',
-        required: false,
-        export: true,
-      },
-    ],
-  };
+  const network = paymentRequirements.network.toLowerCase();
+  const config = networkConfig[network] || networkConfig['sepolia']; // Default to Ethereum Sepolia
 
-  // Build the complete workflow DSL
+  // Extract sender and nonce from payment payload
+  const sender = authorization.from;
+  const paymentNonce = authorization.nonce;
+  
+  // Generate deadline (1 hour from now)
+  const intentDeadline = Math.floor(Date.now() / 1000) + 3600;
+  
+  // Generate deterministic intentId (matching frontend pattern)
+  // intentId = keccak256(sender, nonce, deadline)
+  const intentId = keccak256(encodePacked(
+    ['address', 'bytes32', 'uint256'],
+    [sender as `0x${string}`, paymentNonce as `0x${string}`, BigInt(intentDeadline)]
+  )) as `0x${string}`;
+  
+  console.log(`📝 Generated intent - ID: ${intentId}, sender: ${sender}, deadline: ${intentDeadline}`);
+  
+  // Sign the transaction intent
+  let intentSignature: Hex = '0x';
+  if (params.privateKey) {
+    intentSignature = await signTransactionIntent(
+      intentId,
+      sender as Address,
+      targetContractAddress as Address,
+      params.delegateAddress as Address,
+      BigInt(intentDeadline),
+      params.privateKey as Hex
+    );
+    console.log(`✍️  Signed intent - signature: ${intentSignature.slice(0, 10)}...`);
+  } else {
+    console.warn(`⚠️  No private key provided - using empty signature`);
+  }
+
+  // Build the complete workflow DSL with actual values
   const workflow: WorkflowDSL = {
-    chain_id: chainId,
-    sender,
-    delegate,
-    attestor: attestorImage,
+    chain_id: config.chainId,
+    sender: sender,
+    delegate: params.delegateAddress,
+    attestor: params.attestorImage,
     target: {
-      contract: targetContract || '0x0000000000000000000000000000000000000000',
-      function: 'x402VerifyAndSettle(bytes,bytes)',
-      authData_result: '${x402-settle-payment.result}',
+      contract: targetContractAddress,
+      function: 'executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))',
+      authData_result: '${x402-encode-payment-params.result}',
       parameters: [],
     },
     sponsor_execution_fee: true,
     value: '0',
     intent: {
-      id: '0x0000000000000000000000000000000000000000000000000000000000000000', // Will be set by caller
-      signature: '0x', // Will be set by caller
-      deadline: Math.floor(Date.now() / 1000 + 3600).toString(),
+      id: intentId,
+      signature: intentSignature, // ✅ Signed transaction intent
+      deadline: intentDeadline.toString(),
     },
-    rpc_url: rpcUrl,
-    bundler_url: bundlerUrl,
-    paymaster_url: paymasterUrl,
+    rpc_url: params.rpcUrl,
+    bundler_url: params.bundlerUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
+    paymaster_url: params.paymasterUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
     gas_limit: '500000',
     max_fee_per_gas: '20000000000',
     max_priority_fee_per_gas: '2000000000',
     workflow: {
-      name: 'x402-verify-settle-atomic',
+      name: 'x402-payment-settlement',
       version: 'v1.0.0',
-      steps: [verifyStep, checkValidityStep, settleStep, confirmSettlementStep],
+      steps: [verifyStep, encodePaymentParamsStep],
     },
   };
 
   return workflow;
 }
 
-/**
- * Simplified workflow that just does verify + settle without complex conditional logic
- * Uses the facilitator's internal verify and settle logic
- */
-export function buildSimpleX402Workflow(params: X402WorkflowParams): WorkflowDSL {
-  const {
-    paymentPayload,
-    paymentRequirements,
-    sender,
-    delegate,
-    chainId,
-    attestorImage,
-    rpcUrl,
-    bundlerUrl,
-    paymasterUrl,
-  } = params;
-
-  // Single atomic step that handles both verify and settle
-  const verifyAndSettleStep: WorkflowStep = {
-    name: 'x402-atomic-verify-settle',
-    image: 'ghcr.io/krnl-labs/executor-x402@sha256:placeholder', // Custom x402 executor
-    attestor: attestorImage,
-    inputs: {
-      paymentPayload: JSON.stringify(paymentPayload),
-      paymentRequirements: JSON.stringify(paymentRequirements),
-      network: paymentRequirements.network,
-      privateKey: '${_SECRETS.PRIVATE_KEY}',
-      solanaPrivateKey: '${_SECRETS.SOLANA_PRIVATE_KEY}',
-    },
-    outputs: [
-      {
-        name: 'isValid',
-        value: 'result.isValid',
-        type: 'boolean',
-        required: true,
-        export: true,
-      },
-      {
-        name: 'transactionHash',
-        value: 'result.transactionHash',
-        type: 'string',
-        required: false,
-        export: true,
-      },
-      {
-        name: 'settled',
-        value: 'result.settled',
-        type: 'boolean',
-        required: true,
-        export: true,
-      },
-    ],
-  };
-
-  const workflow: WorkflowDSL = {
-    chain_id: chainId,
-    sender,
-    delegate,
-    attestor: attestorImage,
-    target: {
-      contract: '0x0000000000000000000000000000000000000000',
-      function: 'x402Complete(bytes)',
-      authData_result: '${x402-atomic-verify-settle.result}',
-      parameters: [],
-    },
-    sponsor_execution_fee: true,
-    value: '0',
-    intent: {
-      id: '0x0000000000000000000000000000000000000000000000000000000000000000',
-      signature: '0x',
-      deadline: Math.floor(Date.now() / 1000 + 3600).toString(),
-    },
-    rpc_url: rpcUrl,
-    bundler_url: bundlerUrl,
-    paymaster_url: paymasterUrl,
-    gas_limit: '500000',
-    max_fee_per_gas: '20000000000',
-    max_priority_fee_per_gas: '2000000000',
-    workflow: {
-      name: 'x402-atomic-operation',
-      version: 'v1.0.0',
-      steps: [verifyAndSettleStep],
-    },
-  };
-
-  return workflow;
-}

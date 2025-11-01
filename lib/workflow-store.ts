@@ -1,4 +1,4 @@
-import type { SettleResponse } from 'x402/types';
+import type { SettleResponse } from '../x402/typescript/packages/x402/src/types/index';
 import type { WorkflowStatus } from './krnl-client';
 
 export interface WorkflowTracking {

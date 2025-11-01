@@ -109,6 +109,9 @@ export class KRNLClient {
    */
   async executeWorkflow(workflowDSL: WorkflowDSL): Promise<KRNLExecutionResult> {
     try {
+      console.log(`📤 Sending workflow to KRNL node: ${this.config.nodeUrl}`);
+      console.log(`📋 Workflow DSL:`, JSON.stringify(workflowDSL, null, 2));
+      
       const response = await this.client.post('', {
         jsonrpc: '2.0',
         method: 'krnl_executeWorkflow',
@@ -116,28 +119,46 @@ export class KRNLClient {
         id: Date.now(),
       });
 
+      console.log(`📥 KRNL response:`, JSON.stringify(response.data, null, 2));
+
       if (response.data.error) {
+        console.error(`❌ KRNL returned error:`, response.data.error);
         return {
           success: false,
-          error: response.data.error.message || 'KRNL execution failed',
+          error: response.data.error.message || JSON.stringify(response.data.error),
         };
       }
 
-      // Extract workflow ID from response (adjust based on actual KRNL response format)
-      const workflowId = response.data.result?.workflowId || response.data.result?.id;
+      // Extract intentId and requestId from response
+      const intentId = response.data.result?.intentId;
+      const requestId = response.data.result?.requestId;
+      const accepted = response.data.result?.admissionResult?.accepted;
+
+      if (!accepted) {
+        const reason = response.data.result?.admissionResult?.reason || 'Workflow rejected';
+        console.error(`❌ KRNL rejected workflow:`, reason);
+        return {
+          success: false,
+          error: reason,
+        };
+      }
+
+      console.log(`✅ Workflow accepted - intentId: ${intentId}, requestId: ${requestId}`);
 
       return {
         success: true,
-        workflowId,
+        workflowId: intentId, // Use intentId for polling
         result: response.data.result,
         transactionHash: response.data.result?.transactionHash,
         steps: response.data.result?.steps,
       };
     } catch (error) {
+      console.error(`❌ Exception calling KRNL node:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : '';
       return {
         success: false,
-        error: `KRNL node execution failed: ${errorMessage}`,
+        error: `KRNL node execution failed: ${errorMessage}\n${errorStack}`,
       };
     }
   }
@@ -161,53 +182,93 @@ export class KRNLClient {
   }
 
   /**
-   * Check workflow status
+   * Check workflow status using krnl_workflowStatus
+   * Status codes:
+   * - 1: In progress
+   * - 2: Completed (result field contains transaction hash)
    */
-  async getWorkflowStatus(workflowId: string): Promise<WorkflowStatus> {
+  async getWorkflowStatus(intentId: string): Promise<WorkflowStatus> {
     try {
       const response = await this.client.post('', {
         jsonrpc: '2.0',
-        method: 'krnl_getWorkflowStatus',
-        params: [workflowId],
+        method: 'krnl_workflowStatus',
+        params: [intentId],
         id: Date.now(),
       });
 
       const result = response.data.result;
+      const code = result.code;
+      
+      // Map KRNL status codes to our internal status
+      let status: 'pending' | 'running' | 'completed' | 'failed';
+      let transactionHash: string | undefined;
+      let errorMessage: string | undefined;
+      
+      if (code === 1) {
+        status = 'running';
+      } else if (code === 2) {
+        status = 'completed';
+        transactionHash = result.result; // Transaction hash when completed
+      } else if (code === 3 || code < 0) {
+        status = 'failed';
+        // Extract error details from result
+        errorMessage = result.error || result.message || result.reason || 'Unknown error';
+        
+        // Log full result for debugging
+        console.error(`❌ KRNL workflow failed (code: ${code})`);
+        console.error(`   Intent ID: ${intentId}`);
+        console.error(`   Error: ${errorMessage}`);
+        console.error(`   Full result:`, JSON.stringify(result, null, 2));
+      } else {
+        status = 'pending';
+      }
+      
+      console.log(`📊 Workflow status - intentId: ${intentId}, code: ${code}, status: ${status}`);
+      if (transactionHash) {
+        console.log(`   Transaction hash: ${transactionHash}`);
+      }
+
       return {
-        status: result.status || 'pending',
-        workflowId,
+        status,
+        workflowId: intentId,
         result: result,
-        transactionHash: result.transactionHash,
+        transactionHash,
         steps: result.steps,
-        error: result.error,
+        error: errorMessage || result.error,
       };
     } catch (error) {
+      console.error(`❌ Exception getting workflow status:`, error);
       throw new Error(`Failed to get workflow status: ${error}`);
     }
   }
 
   /**
    * Poll workflow status until completion or timeout
-   * Mimics the SDK's internal polling behavior
+   * Polls krnl_workflowStatus until code === 2 (completed)
    */
   async pollWorkflowUntilComplete(
-    workflowId: string,
+    intentId: string,
     maxWaitMs: number = 60000,
     pollIntervalMs: number = 2000
   ): Promise<WorkflowStatus> {
     const startTime = Date.now();
+    console.log(`🔄 Starting to poll workflow intentId: ${intentId}`);
 
     while (Date.now() - startTime < maxWaitMs) {
-      const status = await this.getWorkflowStatus(workflowId);
+      const status = await this.getWorkflowStatus(intentId);
 
       if (status.status === 'completed') {
+        console.log(`✅ Workflow completed - txHash: ${status.transactionHash}`);
         return status;
       }
 
       if (status.status === 'failed') {
+        console.error(`❌ Workflow failed:`, status.error);
         throw new Error(status.error || 'Workflow failed');
       }
 
+      console.log(`⏳ Workflow ${status.status}, waiting ${pollIntervalMs}ms before next poll...`);
+      
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     }

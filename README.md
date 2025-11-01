@@ -21,7 +21,6 @@ High-performance x402 payment facilitator with **atomic verify+settle** powered 
 - ✅ **Non-blocking** - Verify returns immediately, no latency
 - ✅ **Atomic execution** - Verification and settlement are one indivisible operation
 - ✅ **Trustless** - Cryptographically verified by KRNL attestors
-- ✅ **Resilient** - Falls back to standard x402 if KRNL unavailable
 - ✅ **Cheaper** - Optimized gas costs via EIP-4337 bundling
 
 ## Features
@@ -29,11 +28,10 @@ High-performance x402 payment facilitator with **atomic verify+settle** powered 
 - ⚡ **Ultra-fast**: Built on Fastify, non-blocking async architecture
 - 🔐 **Atomic Settlement**: KRNL-powered atomic verify+settle via workflows
 - 🔄 **Background Polling**: Mimics KRNL React SDK's internal polling mechanism
-- 🌐 **Multi-chain**: Supports EVM networks (Solana disabled for now)
+- 🌐 **Multi-chain**: Supports EVM networks including Ethereum Sepolia, Base Sepolia, Optimism Sepolia, Arbitrum Sepolia
 - 🔒 **Secure**: Validates payment payloads and requirements
-- 🛡️ **Resilient**: Automatic fallback to standard x402 if KRNL fails
+- 🛡️ **KRNL-Only**: No fallback logic - pure KRNL workflow execution
 - 📊 **Production-ready**: Redis-ready workflow tracking, health checks
-- 🎯 **SDK Compatible**: Transparent to x402-express middleware
 
 ## Quick Start
 
@@ -52,15 +50,10 @@ Create a `.env` file:
 PORT=3000
 HOST=0.0.0.0
 
-# EVM Configuration (required)
-# Private key of facilitator wallet used for fallback settlement
-PRIVATE_KEY=your_evm_private_key
-
-# RPC endpoint for the target network (e.g., Base Sepolia)
+# RPC endpoint for your target network (e.g., Sepolia / Base Sepolia)
 RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 
-# KRNL Configuration (enable atomic verify+settle)
-KRNL_ENABLED=true
+# KRNL Node configuration (KRNL-only)
 KRNL_NODE_URL=https://node.krnl.xyz
 
 #EIP-4337 infrastructure
@@ -70,6 +63,9 @@ PAYMASTER_URL=https://api.pimlico.io/v2/sepolia/rpc?apikey=YOUR_KEY
 # KRNL workflow configuration
 ATTESTOR_IMAGE=ghcr.io/krnl-labs/attestor:latest
 FACILITATOR_URL=http://localhost:3000
+
+# X402Target contract for atomic settlement (deployed via contracts/)
+TARGET_CONTRACT_ADDRESS=0xYourDeployedTargetContract
 
 # Optional: Redis for distributed workflow tracking (production)
 # REDIS_URL=redis://localhost:6379
@@ -94,7 +90,7 @@ npm run serve
 
 ### POST /facilitator/verify
 
-Verify x402 payments. When KRNL is enabled, this endpoint **starts** an atomic verify+settle workflow and returns immediately. Background polling tracks workflow progress.
+KRNL-only. Starts an atomic verify+settle workflow and returns immediately. Background polling tracks workflow progress.
 
 **Request Body:**
 ```json
@@ -104,24 +100,14 @@ Verify x402 payments. When KRNL is enabled, this endpoint **starts** an atomic v
 }
 ```
 
-**Response (KRNL enabled - returns immediately):**
+**Response (returns immediately):**
 ```json
 {
   "isValid": true,
   "payer": "0x..."
 }
 ```
-
-**Response (fallback):**
-```json
-{
-  "isValid": true/false,
-  "invalidReason": "...",
-  "payer": "..."
-}
-```
-
-**Note**: With KRNL enabled, settlement happens asynchronously. The `/settle` endpoint will wait for and return the final result.
+Note: Settlement happens asynchronously. The `/settle` endpoint can wait for and return the final result when needed.
 
 ### GET /facilitator/verify
 
@@ -131,11 +117,10 @@ Get API documentation for the verify endpoint.
 
 Settle x402 payments on-chain.
 
-**Behavior with KRNL**:
+Behavior:
 1. If KRNL workflow completed: returns cached result immediately
 2. If KRNL workflow running: waits up to 30s for completion
-3. If KRNL workflow failed or timeout: falls back to standard x402 settle
-4. If no KRNL workflow: uses standard x402 settle
+3. If KRNL workflow failed or timed out: returns error
 
 **Request Body:**
 ```json
@@ -184,7 +169,7 @@ Health check endpoint.
 
 ### KRNL Async Workflow Execution
 
-When a `/verify` request comes in with KRNL enabled:
+When a `/verify` request comes in:
 
 ```typescript
 // 1. Middleware intercepts request
@@ -197,21 +182,15 @@ POST /facilitator/verify
 // 2. Builds KRNL workflow DSL JSON
 {
   "workflow": {
-    "name": "x402-atomic-operation",
+    "name": "x402-payment-settlement",
     "steps": [
-      {
-        "name": "x402-atomic-verify-settle",
-        "image": "ghcr.io/krnl-labs/executor-x402",
-        "inputs": {
-          "paymentPayload": "...",
-          "paymentRequirements": "..."
-        }
-      }
+      { "name": "x402-verify-payment", "image": "ghcr.io/krnl-labs/executor-http" },
+      { "name": "x402-encode-payment-params", "image": "ghcr.io/krnl-labs/executor-encoder-evm" }
     ]
   },
-  "chain_id": 84532,  // Base Sepolia
-  "sender": "0x...",
-  "delegate": "0x..."  // KRNL node address
+  "chain_id": <derived from network>,
+  "sender": "{{ENV.SENDER_ADDRESS}}",
+  "delegate": "{{TRANSACTION_INTENT_DELEGATE}}"
 }
 
 // 3. Starts workflow via JSON-RPC
@@ -254,15 +233,10 @@ POST https://node.krnl.xyz
 // 8. When /settle is called:
 // - If workflow completed: return cached tx hash
 // - If still running: wait up to 30s
-// - If failed: fallback to standard x402 settle
+// - If failed: return error
 ```
 
-### Fallback Mode
-
-If KRNL is disabled or fails:
-- Falls back to standard x402 verification
-- No settlement (requires separate `/settle` call)
-- Still works but without atomic guarantees
+### 
 
 ## How It Works: Async KRNL Flow
 
@@ -314,9 +288,9 @@ const { isValid } = await verify(payload, requirements);  // → POST /facilitat
 const { transaction } = await settle(payload, requirements);  // → POST /facilitator/settle
 ```
 
-Your facilitator transparently handles KRNL:
-- `/verify`: Starts workflow if KRNL enabled, returns `{ isValid: true }` immediately
-- `/settle`: Waits for workflow completion if needed, or uses standard settle
+Your facilitator uses KRNL-only:
+- `/verify`: Always starts a KRNL workflow and returns `{ isValid: true }` immediately
+- `/settle`: Waits or returns cached result from the KRNL workflow
 
 **Solana**: Disabled in this project for now. Only EVM networks are advertised in `/supported`.
 
@@ -435,13 +409,7 @@ curl -X POST http://localhost:3000/facilitator/settle \
 # Response: { "success": true, "transaction": "0x..." }
 ```
 
-### Test Fallback Flow
-```bash
-# Disable KRNL
-KRNL_ENABLED=false npm run dev
 
-# Both verify and settle use standard x402 SDK
-```
 
 ### Monitor Workflow Status
 ```typescript
