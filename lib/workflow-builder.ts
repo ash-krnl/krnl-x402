@@ -137,7 +137,6 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     name: 'x402-encode-payment-params',
     image: 'ghcr.io/krnl-labs/executor-encoder-evm@sha256:b28823d12eb1b16cbcc34c751302cd2dbe7e35480a5bc20e4e7ad50a059b6611',
     attestor: params.attestorImage,
-    next: 'prepare-authdata',
     config: {
       parameters: [
         {
@@ -250,7 +249,7 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     workflow: {
       name: 'x402-payment-settlement',
       version: 'v1.0.0',
-      steps: [verifyStep, encodePaymentParamsStep, prepareAuthDataStep],
+      steps: [verifyStep, encodePaymentParamsStep],
     },
   };
 
