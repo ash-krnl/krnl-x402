@@ -28,6 +28,9 @@ export type CreateHeaders = () => Promise<{
  * @returns An object containing verify and settle functions for interacting with the facilitator
  */
 export function useFacilitator(facilitator?: FacilitatorConfig) {
+  console.log('🔧 useFacilitator initialized with config:');
+  console.log(`   URL: ${facilitator?.url || DEFAULT_FACILITATOR_URL}`);
+  console.log(`   Has createAuthHeaders: ${!!facilitator?.createAuthHeaders}`);
   /**
    * Verifies a payment payload with the facilitator service
    *
@@ -41,27 +44,48 @@ export function useFacilitator(facilitator?: FacilitatorConfig) {
   ): Promise<VerifyResponse> {
     const url = facilitator?.url || DEFAULT_FACILITATOR_URL;
 
-    let headers = { "Content-Type": "application/json" };
+    let headers = {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "x402-facilitator-client/1.0",
+      "Accept": "application/json",
+      "Cache-Control": "no-cache"
+    };
     if (facilitator?.createAuthHeaders) {
       const authHeaders = await facilitator.createAuthHeaders();
       headers = { ...headers, ...authHeaders.verify };
     }
 
+    const requestBody = {
+      x402Version: payload.x402Version,
+      paymentPayload: toJsonSafe(payload),
+      paymentRequirements: toJsonSafe(paymentRequirements),
+    };
+
+    console.log('🔍 Facilitator verify request details:');
+    console.log(`   URL: ${url}/verify`);
+    console.log(`   Method: POST`);
+    console.log(`   Headers:`, JSON.stringify(headers, null, 2));
+    console.log(`   Body:`, JSON.stringify(requestBody, null, 2));
+
     const res = await fetch(`${url}/verify`, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        x402Version: payload.x402Version,
-        paymentPayload: toJsonSafe(payload),
-        paymentRequirements: toJsonSafe(paymentRequirements),
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('📥 Facilitator verify response:');
+    console.log(`   Status: ${res.status} ${res.statusText}`);
+    console.log(`   Headers:`, JSON.stringify(Object.fromEntries(res.headers.entries()), null, 2));
+
     if (res.status !== 200) {
+      const responseText = await res.text();
+      console.log(`   Response body:`, responseText);
       throw new Error(`Failed to verify payment: ${res.statusText}`);
     }
 
     const data = await res.json();
+    console.log(`   Response data:`, JSON.stringify(data, null, 2));
     return data as VerifyResponse;
   }
 

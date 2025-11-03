@@ -48,3 +48,6 @@ contracts/
 KRNL_WORKFLOW_PATTERN.md
 X402_SETTLEMENT_DEEP_DIVE.md
 /test
+/sample
+/sdk-react-7702
+*.md

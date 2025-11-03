@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import type { PaymentPayload, PaymentRequirements, VerifyResponse } from '../x402/typescript/packages/x402/src/types/index';
 import { createKRNLClient, type KRNLNodeConfig } from '../lib/krnl-client';
 import { buildX402VerifySettleWorkflow, type X402WorkflowParams } from '../lib/workflow-builder';
-import { trackWorkflow, startBackgroundPolling } from '../lib/workflow-store';
+import { trackWorkflow, startBackgroundPolling, getWorkflowByNonce } from '../lib/workflow-store';
 
 // Extended VerifyResponse with settlement info
 interface ExtendedVerifyResponse extends VerifyResponse {
@@ -54,6 +54,18 @@ export async function krnlX402Middleware(
 
   const sender = paymentPayload.payload.authorization.from;
   const paymentNonce = paymentPayload.payload.authorization.nonce;
+
+  // Check if workflow already exists for this payment nonce (deduplication)
+  const existingWorkflow = getWorkflowByNonce(paymentNonce);
+  if (existingWorkflow && (existingWorkflow.status === 'pending' || existingWorkflow.status === 'running')) {
+    console.log(`⚠️  Workflow already exists for nonce ${paymentNonce.slice(0, 10)}... (status: ${existingWorkflow.status})`);
+    console.log(`   - Existing workflow ID: ${existingWorkflow.workflowId}`);
+    console.log(`   - Skipping duplicate request`);
+    return {
+      isValid: true,
+      payer: sender,
+    } as VerifyResponse;
+  }
 
   // Create KRNL client
   const krnlConfig: KRNLNodeConfig = {

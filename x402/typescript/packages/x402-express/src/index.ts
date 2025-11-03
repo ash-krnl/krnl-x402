@@ -265,8 +265,17 @@ export function paymentMiddleware(
     }
 
     try {
+      console.log('🚀 x402-express: Calling facilitator verify...');
+      console.log(`   Payment payload:`, JSON.stringify(decodedPayment, null, 2));
+      console.log(`   Selected payment requirements:`, JSON.stringify(selectedPaymentRequirements, null, 2));
+
       const response = await verify(decodedPayment, selectedPaymentRequirements);
+
+      console.log('✅ x402-express: Facilitator verify response received');
+      console.log(`   Response:`, JSON.stringify(response, null, 2));
+
       if (!response.isValid) {
+        console.log('❌ x402-express: Payment verification failed');
         res.status(402).json({
           x402Version,
           error: response.invalidReason,
@@ -276,6 +285,7 @@ export function paymentMiddleware(
         return;
       }
     } catch (error) {
+      console.error('❌ x402-express: Error during payment verification:');
       console.error(error);
       res.status(402).json({
         x402Version,
