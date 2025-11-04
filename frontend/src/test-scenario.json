@@ -1,0 +1,185 @@
+{
+  "chain_id": 11155111,
+  "sender": "{{ENV.SENDER_ADDRESS}}",
+  "delegate": "{{TRANSACTION_INTENT_DELEGATE}}",
+  "attestor": "{{ENV.ATTESTOR_IMAGE}}",
+  "target": {
+    "contract": "{{ENV.TARGET_CONTRACT}}",
+    "function": "executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))",
+    "authData_result": "${x402-encode-payment-params.result}",
+    "parameters": []
+  },
+  "sponsor_execution_fee": true,
+  "value": "0",
+  "intent": {
+    "id": "{{TRANSACTION_INTENT_ID}}",
+    "signature": "{{USER_SIGNATURE}}",
+    "deadline": "{{TRANSACTION_INTENT_DEADLINE}}"
+  },
+  "rpc_url": "https://eth-sepolia.public.blastapi.io",
+  "bundler_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
+  "paymaster_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
+  "gas_limit": "500000",
+  "max_fee_per_gas": "20000000000",
+  "max_priority_fee_per_gas": "2000000000",
+  "workflow": {
+    "name": "x402-payment-settlement",
+    "version": "v1.0.0",
+    "steps": [
+      {
+        "name": "x402-verify-payment",
+        "image": "ghcr.io/krnl-labs/executor-http@sha256:07ef35b261014304a0163502a7f1dec5395c5cac1fc381dc1f79b052389ab0d5",
+        "attestor": "{{ENV.ATTESTOR_IMAGE}}",
+        "next": "x402-encode-payment-params",
+        "inputs": {
+          "url": "{{VERIFY_URL}}/facilitator/verify",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "x-krnl-internal": "true"
+          },
+          "body": {
+            "paymentPayload": {
+              "network": "sepolia",
+              "payload": {
+                "authorization": {
+                  "from": "{{PAYMENT_FROM}}",
+                  "nonce": "{{PAYMENT_NONCE}}",
+                  "to": "{{PAYMENT_TO}}",
+                  "validAfter": "{{PAYMENT_VALID_AFTER}}",
+                  "validBefore": "{{PAYMENT_VALID_BEFORE}}",
+                  "value": "{{PAYMENT_VALUE}}"
+                },
+                "signature": "{{PAYMENT_SIGNATURE}}"
+              },
+              "scheme": "exact",
+              "x402Version": 1
+            },
+            "paymentRequirements": {
+              "asset": "{{PAYMENT_ASSET}}",
+              "description": "{{PAYMENT_DESCRIPTION}}",
+              "extra": {
+                "name": "USD Coin",
+                "version": "2"
+              },
+              "maxAmountRequired": "{{PAYMENT_VALUE}}",
+              "maxTimeoutSeconds": 60,
+              "mimeType": "",
+              "network": "sepolia",
+              "outputSchema": {
+                "input": {
+                  "discoverable": true,
+                  "method": "GET",
+                  "type": "http"
+                },
+                "output": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "payTo": "{{PAYMENT_TO}}",
+              "resource": "{{PAYMENT_RESOURCE}}",
+              "scheme": "exact"
+            }
+          },
+          "timeout": 30
+        },
+        "outputs": [
+          {
+            "name": "isValid",
+            "value": "response.body.isValid",
+            "type": "boolean",
+            "required": true,
+            "export": true
+          },
+          {
+            "name": "payer",
+            "value": "response.body.payer",
+            "type": "string",
+            "required": false,
+            "export": true
+          },
+          {
+            "name": "invalidReason",
+            "value": "response.body.invalidReason",
+            "type": "string",
+            "required": false,
+            "export": true
+          }
+        ]
+      },
+      {
+        "name": "x402-encode-payment-params",
+        "image": "ghcr.io/krnl-labs/executor-encoder-evm@sha256:b28823d12eb1b16cbcc34c751302cd2dbe7e35480a5bc20e4e7ad50a059b6611",
+        "attestor": "{{ENV.ATTESTOR_IMAGE}}",
+        "next": "prepare-authdata",
+        "config": {
+          "parameters": [
+            {
+              "name": "paymentParams",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "from",
+                  "type": "address"
+                },
+                {
+                  "name": "nonce",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "to",
+                  "type": "address"
+                },
+                {
+                  "name": "validAfter",
+                  "type": "uint256"
+                },
+                {
+                  "name": "validBefore",
+                  "type": "uint256"
+                },
+                {
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        "inputs": {
+          "value": {
+            "paymentParams": {
+              "from": "{{PAYMENT_FROM}}",
+              "nonce": "{{PAYMENT_NONCE}}",
+              "signature": "{{PAYMENT_SIGNATURE}}",
+              "to": "{{PAYMENT_TO}}",
+              "validAfter": "{{PAYMENT_VALID_AFTER}}",
+              "validBefore": "{{PAYMENT_VALID_BEFORE}}",
+              "value": "{{PAYMENT_VALUE}}"
+            }
+          }
+        },
+        "outputs": [
+          {
+            "name": "result",
+            "value": "result",
+            "required": true,
+            "export": true
+          }
+        ]
+      }
+    ]
+  }
+}
