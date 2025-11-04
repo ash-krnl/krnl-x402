@@ -5,7 +5,7 @@ import type {
   VerifyResponse,
 } from '../../x402/typescript/packages/x402/src/types/index';
 import { krnlX402Middleware, createKRNLX402Config } from '../../middleware/krnl-x402';
-import { isKRNLNetworkSupported } from './krnl-verify';
+import { isKRNLNetworkSupported, verifyPaymentForKRNL } from './krnl-verify';
 
 interface VerifyRequestBody {
   paymentPayload: PaymentPayload;
@@ -15,8 +15,11 @@ interface VerifyRequestBody {
 /**
  * Handles POST requests to verify x402 payments - KRNL ONLY
  * 
- * This endpoint is exclusively for KRNL atomic verify+settle workflows.
- * There is no fallback to standard x402 verification.
+ * This endpoint serves two purposes:
+ * 1. External calls: Start KRNL atomic verify+settle workflow
+ * 2. Internal calls (from KRNL workflow): Just verify payment without starting new workflow
+ *
+ * Internal calls are detected by the 'x-krnl-internal' header to prevent circular workflow creation.
  *
  * @param request - The incoming request containing payment verification details
  * @param reply - The response object
@@ -29,8 +32,6 @@ export async function postVerifyPayment(
   try {
     const { paymentPayload, paymentRequirements } = request.body;
     const network = paymentRequirements.network;
-
-    console.log(`📋 Verify request received for network: ${network}`);
 
     // Check if network is supported for KRNL workflows
     if (!isKRNLNetworkSupported(network)) {
@@ -45,28 +46,41 @@ export async function postVerifyPayment(
       } as VerifyResponse;
     }
 
-    // Execute KRNL atomic workflow
-    console.log(`🔧 Creating KRNL config...`);
-    const krnlConfig = createKRNLX402Config();
-    
-    console.log(`⚡ Executing KRNL middleware...`);
-    const krnlResult = await krnlX402Middleware(request, reply, krnlConfig);
-    
-    if (krnlResult) {
-      console.log('✅ KRNL workflow started successfully');
-      return krnlResult;
-    }
+    // Detect if this is an INTERNAL call from a KRNL workflow
+    const isInternalCall = request.headers['x-krnl-internal'] === 'true';
 
-    // If KRNL middleware returns null, it means KRNL is not properly configured
-    console.error('❌ KRNL workflow failed - check configuration');
-    reply.code(500);
-    return {
-      isValid: false,
-      invalidReason: 'unexpected_verify_error',
-      payer: 'authorization' in paymentPayload.payload
-        ? (paymentPayload.payload as any).authorization?.from
-        : undefined,
-    } as VerifyResponse;
+    if (isInternalCall) {
+      // INTERNAL: Called from within KRNL workflow - just verify, don't start new workflow
+      console.log(`🔍 Internal verify call (from KRNL workflow)`);
+      const verifyResult = await verifyPaymentForKRNL(
+        paymentPayload,
+        paymentRequirements,
+        process.env.RPC_URL
+      );
+      console.log(`✅ Payment verification: ${verifyResult.isValid ? 'VALID' : 'INVALID'}`);
+      return verifyResult;
+    } else {
+      // EXTERNAL: Client request - start KRNL atomic workflow
+      console.log(`📋 External verify request - starting KRNL workflow for network: ${network}`);
+      const krnlConfig = createKRNLX402Config();
+      const krnlResult = await krnlX402Middleware(request, reply, krnlConfig);
+      
+      if (krnlResult) {
+        console.log('✅ KRNL workflow started successfully');
+        return krnlResult;
+      }
+
+      // KRNL middleware failed
+      console.error('❌ KRNL workflow failed - check configuration');
+      reply.code(500);
+      return {
+        isValid: false,
+        invalidReason: 'unexpected_verify_error',
+        payer: 'authorization' in paymentPayload.payload
+          ? (paymentPayload.payload as any).authorization?.from
+          : undefined,
+      } as VerifyResponse;
+    }
   } catch (error) {
     console.error('❌ Error in postVerifyPayment:', error);
     reply.code(500);

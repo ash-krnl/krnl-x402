@@ -1,7 +1,8 @@
 import type { WorkflowDSL, WorkflowStep } from './krnl-client';
 import type { PaymentPayload, PaymentRequirements } from '../x402/typescript/packages/x402/src/types/index';
-import { keccak256, encodePacked, type Hex, type Address } from 'viem';
+import { keccak256, encodePacked, type Hex, type Address, createPublicClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { sepolia, baseSepolia, optimismSepolia, arbitrumSepolia } from 'viem/chains';
 
 /**
  * Sign a transaction intent for KRNL workflow execution
@@ -13,7 +14,8 @@ async function signTransactionIntent(
   target: Address,
   delegate: Address,
   deadline: bigint,
-  privateKey: Hex
+  privateKey: Hex,
+  chainId: number
 ): Promise<Hex> {
   const account = privateKeyToAccount(privateKey);
   
@@ -21,7 +23,7 @@ async function signTransactionIntent(
   const domain = {
     name: 'KRNL',
     version: '1',
-    chainId: 11155111, // Sepolia
+    chainId,
   } as const;
   
   // Transaction intent type
@@ -65,6 +67,58 @@ export interface X402WorkflowParams {
   privateKey?: string; // Private key for signing transaction intent
 }
 
+// Minimal ABI for reading nonces from target contract
+const NONCES_ABI = [{
+  name: 'nonces',
+  type: 'function',
+  stateMutability: 'view',
+  inputs: [{ name: 'account', type: 'address' }],
+  outputs: [{ name: 'nonce', type: 'uint256' }],
+}] as const;
+
+/**
+ * Get contract nonce for a sender address
+ * Matches the sample frontend pattern: getContractNonce()
+ */
+async function getContractNonce(
+  targetContractAddress: string,
+  senderAddress: string,
+  rpcUrl: string,
+  chainId: number
+): Promise<bigint> {
+  // Map chainId to viem chain
+  const chainMap: Record<number, any> = {
+    11155111: sepolia,
+    84532: baseSepolia,
+    11155420: optimismSepolia,
+    421614: arbitrumSepolia,
+  };
+  
+  const chain = chainMap[chainId] || sepolia;
+  
+  const client = createPublicClient({
+    chain,
+    transport: http(rpcUrl),
+  });
+  
+  try {
+    const nonce = await client.readContract({
+      address: targetContractAddress as Address,
+      abi: NONCES_ABI,
+      functionName: 'nonces',
+      args: [senderAddress as Address],
+    });
+    
+    console.log(`📊 Contract nonce for ${senderAddress}: ${nonce}`);
+    return nonce as bigint;
+  } catch (error) {
+    console.error(`❌ Failed to read contract nonce:`, error);
+    // Fallback to 0 if contract doesn't have nonces function
+    console.warn(`⚠️  Using nonce = 0 (contract may not have nonces function)`);
+    return 0n;
+  }
+}
+
 /**
  * Build KRNL workflow DSL for x402 payment settlement
  * 
@@ -90,10 +144,11 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     attestor: params.attestorImage,
     next: 'x402-encode-payment-params',
     inputs: {
-      url: `${params.facilitatorUrl}/verify`,
+      url: `${params.facilitatorUrl}/facilitator/verify`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-krnl-internal': 'true', // Marks this as internal call to prevent circular workflow creation
       },
       body: {
         paymentPayload,
@@ -190,18 +245,26 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   const network = paymentRequirements.network.toLowerCase();
   const config = networkConfig[network] || networkConfig['sepolia']; // Default to Ethereum Sepolia
 
-  // Extract sender and nonce from payment payload
+  // Extract sender from payment payload
   const sender = authorization.from;
-  const paymentNonce = authorization.nonce;
+  
+  // Get contract nonce (uint256) - MATCHES SAMPLE FRONTEND PATTERN
+  // Sample uses: const nonce = await getContractNonce(embeddedWallet);
+  const contractNonce = await getContractNonce(
+    targetContractAddress,
+    sender,
+    params.rpcUrl,
+    config.chainId
+  );
   
   // Generate deadline (1 hour from now)
   const intentDeadline = Math.floor(Date.now() / 1000) + 3600;
   
   // Generate deterministic intentId (matching frontend pattern)
-  // intentId = keccak256(sender, nonce, deadline)
+  // Sample: keccak256(encodePacked(['address', 'uint256', 'uint256'], [address, nonce, deadline]))
   const intentId = keccak256(encodePacked(
-    ['address', 'bytes32', 'uint256'],
-    [sender as `0x${string}`, paymentNonce as `0x${string}`, BigInt(intentDeadline)]
+    ['address', 'uint256', 'uint256'],
+    [sender as `0x${string}`, contractNonce, BigInt(intentDeadline)]
   )) as `0x${string}`;
   
   console.log(`📝 Generated intent - ID: ${intentId}, sender: ${sender}, deadline: ${intentDeadline}`);
@@ -215,7 +278,8 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
       targetContractAddress as Address,
       params.delegateAddress as Address,
       BigInt(intentDeadline),
-      params.privateKey as Hex
+      params.privateKey as Hex,
+      config.chainId
     );
     console.log(`✍️  Signed intent - signature: ${intentSignature.slice(0, 10)}...`);
   } else {
@@ -244,7 +308,7 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     rpc_url: params.rpcUrl,
     bundler_url: params.bundlerUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
     paymaster_url: params.paymasterUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
-    gas_limit: '500000',
+    gas_limit: '100000', // Match sample frontend gas settings
     max_fee_per_gas: '20000000000',
     max_priority_fee_per_gas: '2000000000',
     workflow: {

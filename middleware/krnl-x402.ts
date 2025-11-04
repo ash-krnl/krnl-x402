@@ -57,7 +57,7 @@ export async function krnlX402Middleware(
 
   // Check if workflow already exists for this payment nonce (deduplication)
   const existingWorkflow = getWorkflowByNonce(paymentNonce);
-  if (existingWorkflow && (existingWorkflow.status === 'pending' || existingWorkflow.status === 'running')) {
+  if (existingWorkflow) {
     console.log(`⚠️  Workflow already exists for nonce ${paymentNonce.slice(0, 10)}... (status: ${existingWorkflow.status})`);
     console.log(`   - Existing workflow ID: ${existingWorkflow.workflowId}`);
     console.log(`   - Skipping duplicate request`);
@@ -66,6 +66,12 @@ export async function krnlX402Middleware(
       payer: sender,
     } as VerifyResponse;
   }
+
+  // IMPORTANT: Track workflow BEFORE execution to prevent race conditions
+  // This ensures that if KRNL executes the verify step immediately,
+  // it won't trigger a duplicate workflow creation
+  console.log(`📝 Pre-tracking workflow for nonce ${paymentNonce.slice(0, 10)}... (status: pending)`);
+  trackWorkflow(paymentNonce, 'PENDING_EXECUTION');
 
   // Create KRNL client
   const krnlConfig: KRNLNodeConfig = {
@@ -107,6 +113,16 @@ export async function krnlX402Middleware(
 
   if (!result.success) {
     console.error('❌ Failed to start KRNL workflow:', result.error);
+    // Remove the pre-tracked workflow since execution failed
+    const workflow = getWorkflowByNonce(paymentNonce);
+    if (workflow) {
+      workflow.status = 'failed';
+      workflow.workflowStatus = { 
+        status: 'failed', 
+        workflowId: 'FAILED', 
+        error: result.error 
+      } as any;
+    }
     return {
       isValid: false,
       invalidReason: 'unexpected_verify_error',
@@ -123,8 +139,12 @@ export async function krnlX402Middleware(
     } as VerifyResponse;
   }
 
-  // Track workflow for async polling using payment nonce as key
-  trackWorkflow(paymentNonce, result.workflowId);
+  // Update workflow tracking with actual intentId
+  const workflow = getWorkflowByNonce(paymentNonce);
+  if (workflow) {
+    workflow.workflowId = result.workflowId;
+    console.log(`✅ Updated workflow tracking with intentId: ${result.workflowId}`);
+  }
 
   // Start background polling (does not block)
   // This will poll krnl_workflowStatus until code === 2 (completed)
