@@ -5,21 +5,79 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia, baseSepolia, optimismSepolia, arbitrumSepolia } from 'viem/chains';
 
 /**
+ * Transaction Intent Parameters
+ * Matches KRNL SDK TransactionIntentParams structure from frontend
+ */
+export interface TransactionIntentParams {
+  target: Address;
+  value: bigint;
+  id: Hex;
+  nodeAddress: Address;
+  delegate: Address;
+  targetFunction: Hex;
+  nonce: bigint;
+  deadline: bigint;
+}
+
+/**
+ * Create a transaction intent
+ * Matches frontend pattern: createTransactionIntent(embeddedWallet, nonce, nodeAddress)
+ */
+function createTransactionIntent(
+  sender: Address,
+  nonce: bigint,
+  deadline: number,
+  targetContract: Address,
+  nodeAddress: Address,
+  functionSelector: Hex
+): TransactionIntentParams {
+  // Generate deterministic intentId - MATCHES FRONTEND PATTERN
+  // Frontend: keccak256(encodePacked(['address', 'uint256', 'uint256'], [address, nonce, deadline]))
+  const intentId = keccak256(encodePacked(
+    ['address', 'uint256', 'uint256'],
+    [sender, nonce, BigInt(deadline)]
+  )) as Hex;
+  
+  return {
+    target: targetContract,
+    value: BigInt(0),
+    id: intentId,
+    nodeAddress,
+    delegate: nodeAddress,
+    targetFunction: functionSelector,
+    nonce,
+    deadline: BigInt(deadline),
+  };
+}
+
+/**
+ * Get function selector for executePayment
+ * Matches frontend pattern: getFunctionSelector()
+ */
+function getFunctionSelector(): Hex {
+  // Frontend calculates: keccak256(encodePacked(['string'], [functionSig])).slice(0, 10)
+  // For executePayment((address,bytes32,bytes,address,uint256,uint256,uint256))
+  const functionSig = 'executePayment((address,bytes32,bytes,address,uint256,uint256,uint256))';
+  const selector = keccak256(encodePacked(['string'], [functionSig])).slice(0, 10) as Hex;
+  return selector;
+}
+
+/**
  * Sign a transaction intent for KRNL workflow execution
- * Matches the frontend pattern from KRNL SDK
+ * Matches the frontend pattern from KRNL SDK (@krnl-dev/sdk-react-7702)
+ * 
+ * Frontend equivalent: signTransactionIntent(transactionIntent)
  */
 async function signTransactionIntent(
-  intentId: Hex,
+  transactionIntent: TransactionIntentParams,
   sender: Address,
-  target: Address,
-  delegate: Address,
-  deadline: bigint,
   privateKey: Hex,
   chainId: number
 ): Promise<Hex> {
   const account = privateKeyToAccount(privateKey);
   
   // EIP-712 domain for KRNL transaction intents
+  // Matches KRNL SDK domain configuration
   const domain = {
     name: 'KRNL',
     version: '1',
@@ -27,6 +85,7 @@ async function signTransactionIntent(
   } as const;
   
   // Transaction intent type
+  // Matches KRNL SDK EIP-712 types
   const types = {
     TransactionIntent: [
       { name: 'id', type: 'bytes32' },
@@ -37,17 +96,17 @@ async function signTransactionIntent(
     ],
   } as const;
   
-  // Sign the transaction intent
+  // Sign the transaction intent using EIP-712
   const signature = await account.signTypedData({
     domain,
     types,
     primaryType: 'TransactionIntent',
     message: {
-      id: intentId,
+      id: transactionIntent.id,
       sender,
-      target,
-      delegate,
-      deadline,
+      target: transactionIntent.target,
+      delegate: transactionIntent.delegate,
+      deadline: transactionIntent.deadline,
     },
   });
   
@@ -246,42 +305,48 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   const config = networkConfig[network] || networkConfig['sepolia']; // Default to Ethereum Sepolia
 
   // Extract sender from payment payload
-  const sender = authorization.from;
+  const sender = authorization.from as Address;
   
-  // Get contract nonce (uint256) - MATCHES SAMPLE FRONTEND PATTERN
-  // Sample uses: const nonce = await getContractNonce(embeddedWallet);
-  const contractNonce = await getContractNonce(
+  // Get contract nonce (uint256) - MATCHES FRONTEND PATTERN
+  // Frontend: const nonce = await getContractNonce(embeddedWallet);
+  const nonce = await getContractNonce(
     targetContractAddress,
     sender,
     params.rpcUrl,
     config.chainId
   );
   
-  // Generate deadline (1 hour from now)
-  const intentDeadline = Math.floor(Date.now() / 1000) + 3600;
+  // Generate deadline (1 hour from now) - MATCHES FRONTEND PATTERN
+  const deadline = Math.floor(Date.now() / 1000) + 3600;
   
-  // Generate deterministic intentId (matching frontend pattern)
-  // Sample: keccak256(encodePacked(['address', 'uint256', 'uint256'], [address, nonce, deadline]))
-  const intentId = keccak256(encodePacked(
-    ['address', 'uint256', 'uint256'],
-    [sender as `0x${string}`, contractNonce, BigInt(intentDeadline)]
-  )) as `0x${string}`;
+  // Get function selector for executePayment - MATCHES FRONTEND PATTERN
+  // Frontend: const functionSelector = getFunctionSelector();
+  const functionSelector = getFunctionSelector();
   
-  console.log(`📝 Generated intent - ID: ${intentId}, sender: ${sender}, deadline: ${intentDeadline}`);
+  // Create TransactionIntent object - MATCHES FRONTEND PATTERN
+  // Frontend: const transactionIntent = createTransactionIntent(embeddedWallet, nonce, nodeAddress);
+  const transactionIntent = createTransactionIntent(
+    sender,
+    nonce,
+    deadline,
+    targetContractAddress as Address,
+    params.delegateAddress as Address,
+    functionSelector
+  );
   
-  // Sign the transaction intent
+  console.log(`📝 Created transaction intent - ID: ${transactionIntent.id}, sender: ${sender}, deadline: ${deadline}`);
+  
+  // Sign the transaction intent - MATCHES FRONTEND PATTERN
+  // Frontend: const signature = await signTransactionIntent(transactionIntent);
   let intentSignature: Hex = '0x';
   if (params.privateKey) {
     intentSignature = await signTransactionIntent(
-      intentId,
-      sender as Address,
-      targetContractAddress as Address,
-      params.delegateAddress as Address,
-      BigInt(intentDeadline),
+      transactionIntent,
+      sender,
       params.privateKey as Hex,
       config.chainId
     );
-    console.log(`✍️  Signed intent - signature: ${intentSignature.slice(0, 10)}...`);
+    console.log(`✍️  Signed transaction intent - signature: ${intentSignature.slice(0, 10)}...`);
   } else {
     console.warn(`⚠️  No private key provided - using empty signature`);
   }
@@ -301,14 +366,14 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     sponsor_execution_fee: true,
     value: '0',
     intent: {
-      id: intentId,
+      id: transactionIntent.id,
       signature: intentSignature, // ✅ Signed transaction intent
-      deadline: intentDeadline.toString(),
+      deadline: transactionIntent.deadline.toString(),
     },
     rpc_url: params.rpcUrl,
     bundler_url: params.bundlerUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
     paymaster_url: params.paymasterUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
-    gas_limit: '100000', // Match sample frontend gas settings
+    gas_limit: '500000', // Match frontend gas settings
     max_fee_per_gas: '20000000000',
     max_priority_fee_per_gas: '2000000000',
     workflow: {
