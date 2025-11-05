@@ -29,6 +29,7 @@ function createTransactionIntent(
   deadline: number,
   targetContract: Address,
   nodeAddress: Address,
+  delegate: Address,
   functionSelector: Hex
 ): TransactionIntentParams {
   // Generate deterministic intentId - MATCHES FRONTEND PATTERN
@@ -43,7 +44,7 @@ function createTransactionIntent(
     value: BigInt(0),
     id: intentId,
     nodeAddress,
-    delegate: nodeAddress,
+    delegate,  // TARGET_CONTRACT_OWNER, NOT nodeAddress!
     targetFunction: functionSelector,
     nonce,
     deadline: BigInt(deadline),
@@ -53,11 +54,18 @@ function createTransactionIntent(
 /**
  * Get function selector for executePayment
  * Matches frontend pattern: getFunctionSelector()
+ * 
+ * Frontend builds the signature from ABI dynamically, but the result is:
+ * executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))
+ * 
+ * This represents: executePayment(AuthData calldata authData)
+ * Where AuthData is: (nonce, expiry, id, executions[], result, sponsorExecutionFee, signature)
  */
 function getFunctionSelector(): Hex {
   // Frontend calculates: keccak256(encodePacked(['string'], [functionSig])).slice(0, 10)
-  // For executePayment((address,bytes32,bytes,address,uint256,uint256,uint256))
-  const functionSig = 'executePayment((address,bytes32,bytes,address,uint256,uint256,uint256))';
+  // AuthData struct: (uint256 nonce, uint256 expiry, bytes32 id, Execution[] executions, bytes result, bool sponsorExecutionFee, bytes signature)
+  // Execution struct: (bytes32 id, bytes request, bytes response)
+  const functionSig = 'executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))';
   const selector = keccak256(encodePacked(['string'], [functionSig])).slice(0, 10) as Hex;
   return selector;
 }
@@ -117,7 +125,8 @@ export interface X402WorkflowParams {
   paymentPayload: PaymentPayload;
   paymentRequirements: PaymentRequirements;
   targetContractAddress: string; // X402Target contract address
-  delegateAddress: string; // KRNL node delegate address
+  delegateAddress: string; // Target contract owner/delegate (TARGET_CONTRACT_OWNER)
+  nodeAddress: string; // KRNL node address from getConfig()
   attestorImage: string; // Docker attestor image
   facilitatorUrl: string; // Facilitator URL
   rpcUrl: string; // RPC endpoint
@@ -325,12 +334,14 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   
   // Create TransactionIntent object - MATCHES FRONTEND PATTERN
   // Frontend: const transactionIntent = createTransactionIntent(embeddedWallet, nonce, nodeAddress);
+  // Frontend sets: nodeAddress=from getConfig(), delegate=TARGET_CONTRACT_OWNER
   const transactionIntent = createTransactionIntent(
     sender,
     nonce,
     deadline,
     targetContractAddress as Address,
-    params.delegateAddress as Address,
+    params.nodeAddress as Address,  // nodeAddress from KRNL config
+    params.delegateAddress as Address,  // TARGET_CONTRACT_OWNER
     functionSelector
   );
   
@@ -355,7 +366,7 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   const workflow: WorkflowDSL = {
     chain_id: config.chainId,
     sender: sender,
-    delegate: params.delegateAddress,
+    delegate: params.delegateAddress,  // TARGET_CONTRACT_OWNER
     attestor: params.attestorImage,
     target: {
       contract: targetContractAddress,

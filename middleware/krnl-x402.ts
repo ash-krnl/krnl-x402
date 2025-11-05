@@ -23,8 +23,8 @@ export interface KRNLX402Config {
   paymasterUrl?: string;
   attestorImage: string;
   facilitatorUrl: string;
-  defaultDelegate?: string;
   targetContractAddress: string; // X402Target contract address (required)
+  targetContractOwner: string; // Target contract owner/delegate (required)
 }
 
 /**
@@ -84,7 +84,7 @@ export async function krnlX402Middleware(
 
   // Get KRNL node configuration
   const nodeConfig = await krnlClient.getNodeConfig();
-  const nodeAddress = nodeConfig?.workflow?.node_address || config.defaultDelegate;
+  const nodeAddress = nodeConfig?.workflow?.node_address;
 
   if (!nodeAddress) {
     console.error('❌ KRNL node address not available');
@@ -92,11 +92,13 @@ export async function krnlX402Middleware(
   }
 
   // Build workflow DSL for atomic verify + settle
+  // IMPORTANT: delegateAddress = TARGET_CONTRACT_OWNER, nodeAddress = from KRNL config
   const workflowParams: X402WorkflowParams = {
     paymentPayload,
     paymentRequirements,
     targetContractAddress: config.targetContractAddress,
-    delegateAddress: nodeAddress,
+    delegateAddress: config.targetContractOwner,  // TARGET_CONTRACT_OWNER (matches frontend)
+    nodeAddress,  // KRNL node address from getConfig() (matches frontend)
     attestorImage: config.attestorImage,
     facilitatorUrl: config.facilitatorUrl,
     rpcUrl: config.rpcUrl,
@@ -188,9 +190,14 @@ function getChainId(network: string): number {
  */
 export function createKRNLX402Config(): KRNLX402Config {
   const targetContractAddress = process.env.TARGET_CONTRACT_ADDRESS;
+  const targetContractOwner = process.env.TARGET_CONTRACT_OWNER;
   
   if (!targetContractAddress) {
     throw new Error('TARGET_CONTRACT_ADDRESS environment variable is required for KRNL workflows');
+  }
+  
+  if (!targetContractOwner) {
+    throw new Error('TARGET_CONTRACT_OWNER environment variable is required for KRNL workflows');
   }
 
   return {
@@ -200,7 +207,7 @@ export function createKRNLX402Config(): KRNLX402Config {
     paymasterUrl: process.env.PAYMASTER_URL,
     attestorImage: process.env.ATTESTOR_IMAGE || 'ghcr.io/krnl-labs/attestor:latest',
     facilitatorUrl: process.env.FACILITATOR_URL || 'http://localhost:3000',
-    defaultDelegate: process.env.DEFAULT_DELEGATE,
     targetContractAddress,
+    targetContractOwner,
   };
 }
