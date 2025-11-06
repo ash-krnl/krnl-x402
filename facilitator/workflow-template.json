@@ -1,0 +1,138 @@
+{
+  "chain_id": "{{CHAIN_ID}}",
+  "sender": "{{SENDER}}",
+  "delegate": "{{DELEGATE}}",
+  "attestor": "{{ATTESTOR_IMAGE}}",
+  "target": {
+    "contract": "{{TARGET_CONTRACT}}",
+    "function": "executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))",
+    "authData_result": "${x402-encode-payment-params.result}",
+    "parameters": []
+  },
+  "sponsor_execution_fee": true,
+  "value": "0",
+  "intent": {
+    "id": "{{INTENT_ID}}",
+    "signature": "{{INTENT_SIGNATURE}}",
+    "deadline": "{{INTENT_DEADLINE}}"
+  },
+  "rpc_url": "{{RPC_URL}}",
+  "bundler_url": "{{BUNDLER_URL}}",
+  "paymaster_url": "{{PAYMASTER_URL}}",
+  "gas_limit": "500000",
+  "max_fee_per_gas": "20000000000",
+  "max_priority_fee_per_gas": "2000000000",
+  "workflow": {
+    "name": "x402-payment-settlement",
+    "version": "v1.0.0",
+    "steps": [
+      {
+        "name": "x402-verify-payment",
+        "image": "ghcr.io/krnl-labs/executor-http@sha256:07ef35b261014304a0163502a7f1dec5395c5cac1fc381dc1f79b052389ab0d5",
+        "attestor": "{{ATTESTOR_IMAGE}}",
+        "next": "x402-encode-payment-params",
+        "inputs": {
+          "url": "{{FACILITATOR_URL}}/facilitator/verify",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "x-krnl-internal": "true"
+          },
+          "body": {
+            "paymentPayload": "{{PAYMENT_PAYLOAD}}",
+            "paymentRequirements": "{{PAYMENT_REQUIREMENTS}}"
+          },
+          "timeout": 30
+        },
+        "outputs": [
+          {
+            "name": "isValid",
+            "value": "response.body.isValid",
+            "type": "boolean",
+            "required": true,
+            "export": true
+          },
+          {
+            "name": "payer",
+            "value": "response.body.payer",
+            "type": "string",
+            "required": false,
+            "export": true
+          },
+          {
+            "name": "invalidReason",
+            "value": "response.body.invalidReason",
+            "type": "string",
+            "required": false,
+            "export": true
+          }
+        ]
+      },
+      {
+        "name": "x402-encode-payment-params",
+        "image": "ghcr.io/krnl-labs/executor-encoder-evm@sha256:b28823d12eb1b16cbcc34c751302cd2dbe7e35480a5bc20e4e7ad50a059b6611",
+        "attestor": "{{ATTESTOR_IMAGE}}",
+        "next": "prepare-authdata",
+        "config": {
+          "parameters": [
+            {
+              "name": "paymentParams",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "from",
+                  "type": "address"
+                },
+                {
+                  "name": "nonce",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "to",
+                  "type": "address"
+                },
+                {
+                  "name": "validAfter",
+                  "type": "uint256"
+                },
+                {
+                  "name": "validBefore",
+                  "type": "uint256"
+                },
+                {
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        "inputs": {
+          "value": {
+            "paymentParams": {
+              "from": "{{PAYMENT_FROM}}",
+              "nonce": "{{PAYMENT_NONCE}}",
+              "signature": "{{PAYMENT_SIGNATURE}}",
+              "to": "{{PAYMENT_TO}}",
+              "validAfter": "{{PAYMENT_VALID_AFTER}}",
+              "validBefore": "{{PAYMENT_VALID_BEFORE}}",
+              "value": "{{PAYMENT_VALUE}}"
+            }
+          }
+        },
+        "outputs": [
+          {
+            "name": "result",
+            "value": "result",
+            "required": true,
+            "export": true
+          }
+        ]
+      }
+    ]
+  }
+}

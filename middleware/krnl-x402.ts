@@ -23,8 +23,8 @@ export interface KRNLX402Config {
   paymasterUrl?: string;
   attestorImage: string;
   facilitatorUrl: string;
-  targetContractAddress: string; // X402Target contract address (required)
-  targetContractOwner: string; // Target contract owner/delegate (required)
+  // Note: Client provides target contract address, owner/delegate, and node address in transaction intent
+  // Facilitator uses client's values directly - no config overrides needed!
 }
 
 /**
@@ -82,30 +82,17 @@ export async function krnlX402Middleware(
   };
   const krnlClient = createKRNLClient(krnlConfig);
 
-  // Get KRNL node configuration
-  const nodeConfig = await krnlClient.getNodeConfig();
-  const nodeAddress = nodeConfig?.workflow?.node_address;
-
-  if (!nodeAddress) {
-    console.error('❌ KRNL node address not available');
-    return null;
-  }
-
   // Build workflow DSL for atomic verify + settle
-  // IMPORTANT: delegateAddress = TARGET_CONTRACT_OWNER, nodeAddress = from KRNL config
-  // Client provides intent signature in payment payload - no facilitator signing
+  // Client provides ALL intent params (target, delegate, node, nonce, deadline) + signature
+  // Facilitator extracts these from client's transaction intent in payload
   const workflowParams: X402WorkflowParams = {
     paymentPayload,
     paymentRequirements,
-    targetContractAddress: config.targetContractAddress,
-    delegateAddress: config.targetContractOwner,  // TARGET_CONTRACT_OWNER (matches frontend)
-    nodeAddress,  // KRNL node address from getConfig() (matches frontend)
     attestorImage: config.attestorImage,
     facilitatorUrl: config.facilitatorUrl,
     rpcUrl: config.rpcUrl,
     bundlerUrl: config.bundlerUrl,
     paymasterUrl: config.paymasterUrl,
-    // Note: No privateKey - client signs intent and includes in payload
   };
 
   const workflowDSL = await buildX402VerifySettleWorkflow(workflowParams);
@@ -188,19 +175,9 @@ function getChainId(network: string): number {
 
 /**
  * Create KRNL x402 configuration from environment variables
+ * Note: Client provides target contract, delegate, and node addresses in transaction intent
  */
 export function createKRNLX402Config(): KRNLX402Config {
-  const targetContractAddress = process.env.TARGET_CONTRACT_ADDRESS;
-  const targetContractOwner = process.env.TARGET_CONTRACT_OWNER;
-  
-  if (!targetContractAddress) {
-    throw new Error('TARGET_CONTRACT_ADDRESS environment variable is required for KRNL workflows');
-  }
-  
-  if (!targetContractOwner) {
-    throw new Error('TARGET_CONTRACT_OWNER environment variable is required for KRNL workflows');
-  }
-
   return {
     nodeUrl: process.env.KRNL_NODE_URL || 'https://node.krnl.xyz',
     rpcUrl: process.env.RPC_URL || 'https://lb.drpc.org/sepolia/AnRM4mK1tEyphrn_jexSLbrPxqT4wGIR760VIlZWwHzR',
@@ -208,7 +185,5 @@ export function createKRNLX402Config(): KRNLX402Config {
     paymasterUrl: process.env.PAYMASTER_URL,
     attestorImage: process.env.ATTESTOR_IMAGE || 'ghcr.io/krnl-labs/attestor:latest',
     facilitatorUrl: process.env.FACILITATOR_URL || 'http://localhost:3000',
-    targetContractAddress,
-    targetContractOwner,
   };
 }
