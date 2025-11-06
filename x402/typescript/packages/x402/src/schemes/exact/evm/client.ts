@@ -63,8 +63,9 @@ export async function signPaymentHeader<transport extends Transport, chain exten
     paymentRequirements,
   );
 
-  // Check if client has KRNL intent signature (optional for KRNL workflows)
+  // Check if client has KRNL intent params and signature (optional for KRNL workflows)
   const intentSignature = (client as any).intentSignature;
+  const transactionIntent = (client as any).transactionIntent;
 
   return {
     ...unsignedPaymentHeader,
@@ -72,6 +73,7 @@ export async function signPaymentHeader<transport extends Transport, chain exten
       ...unsignedPaymentHeader.payload,
       signature,
       ...(intentSignature ? { intentSignature } : {}), // Add intent signature if available
+      ...(transactionIntent ? { transactionIntent } : {}), // Add transaction intent params if available
     },
   };
 }
