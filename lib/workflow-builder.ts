@@ -272,41 +272,38 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   // Extract sender from payment payload
   const sender = authorization.from as Address;
   
-  // Get contract nonce (uint256) - MATCHES FRONTEND PATTERN
-  // Frontend: const nonce = await getContractNonce(embeddedWallet);
-  const nonce = await getContractNonce(
-    targetContractAddress,
-    sender,
-    params.rpcUrl,
-    config.chainId
-  );
-  
-  // Generate deadline (1 hour from now) - MATCHES FRONTEND PATTERN
-  const deadline = Math.floor(Date.now() / 1000) + 3600;
-  
-  // Get function selector for executePayment - MATCHES FRONTEND PATTERN
-  // Frontend: const functionSelector = getFunctionSelector();
-  const functionSelector = getFunctionSelector();
-  
-  // Create TransactionIntent object - MATCHES FRONTEND PATTERN
-  // Frontend: const transactionIntent = createTransactionIntent(embeddedWallet, nonce, nodeAddress);
-  // Frontend sets: nodeAddress=from getConfig(), delegate=TARGET_CONTRACT_OWNER
-  const transactionIntent = createTransactionIntent(
-    sender,
-    nonce,
-    deadline,
-    targetContractAddress as Address,
-    params.nodeAddress as Address,  // nodeAddress from KRNL config
-    params.delegateAddress as Address,  // TARGET_CONTRACT_OWNER
-    functionSelector
-  );
-  
-  console.log(`📝 Created transaction intent - ID: ${transactionIntent.id}, sender: ${sender}, deadline: ${deadline}`);
-  
-  // Extract intent signature from payment payload (signed by client)
-  // Client MUST sign the transaction intent with their key (e.g., Privy session key)
+  // Extract transaction intent parameters from client payload
+  // Client provides BOTH the intent params (nonce, deadline, id) AND signature
+  // This ensures intent ID matches what client signed!
   const payloadData = payload as any;
+  const clientIntent = payloadData.transactionIntent;
   const intentSignature: Hex = payloadData.intentSignature;
+  
+  if (!clientIntent) {
+    console.error(`❌ No transaction intent provided by client`);
+    console.error(`   Client must include transactionIntent in payment payload`);
+    throw new Error('Missing transaction intent - client must provide intent parameters');
+  }
+  
+  // Use client's intent parameters directly - DO NOT RECOMPUTE!
+  // Client computed intentId = keccak256(sender, nonce, deadline) at time T1
+  // If we recompute with new nonce/deadline at time T2, intentId will be different!
+  const transactionIntent: TransactionIntentParams = {
+    target: clientIntent.target as Address,
+    value: BigInt(clientIntent.value),
+    id: clientIntent.id as Hex,
+    nodeAddress: clientIntent.nodeAddress as Address,
+    delegate: clientIntent.delegate as Address,
+    targetFunction: clientIntent.targetFunction as Hex,
+    nonce: BigInt(clientIntent.nonce),
+    deadline: BigInt(clientIntent.deadline)
+  };
+  
+  console.log(`📝 Using client transaction intent:`);
+  console.log(`   ID: ${transactionIntent.id}`);
+  console.log(`   Nonce: ${transactionIntent.nonce.toString()}`);
+  console.log(`   Deadline: ${transactionIntent.deadline.toString()}`);
+  console.log(`   Sender: ${sender}`);
   
   if (!intentSignature || intentSignature === '0x') {
     console.error(`❌ No intent signature provided by client`);
