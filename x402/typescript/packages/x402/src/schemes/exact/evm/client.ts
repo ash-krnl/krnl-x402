@@ -64,28 +64,25 @@ export async function signPaymentHeader<transport extends Transport, chain exten
   );
 
   // Check if client has KRNL intent params and signature (optional for KRNL workflows)
+  // Extract flat fields needed by facilitator for template replacement
   const intentSignature = (client as any).intentSignature;
   const transactionIntent = (client as any).transactionIntent;
 
-  // Convert BigInt values to strings for JSON serialization
-  const serializedIntent = transactionIntent ? {
-    target: transactionIntent.target,
-    value: transactionIntent.value.toString(),
-    id: transactionIntent.id,
-    nodeAddress: transactionIntent.nodeAddress,
-    delegate: transactionIntent.delegate,
-    targetFunction: transactionIntent.targetFunction,
-    nonce: transactionIntent.nonce.toString(),
-    deadline: transactionIntent.deadline.toString(),
-  } : undefined;
+  // Build flat KRNL fields for facilitator (only what's needed for DSL template)
+  const krnlFields = transactionIntent && intentSignature ? {
+    intentId: transactionIntent.id,
+    intentSignature: intentSignature,
+    intentDeadline: transactionIntent.deadline.toString(),
+    intentDelegate: transactionIntent.delegate,
+    intentTarget: transactionIntent.target,
+  } : {};
 
   return {
     ...unsignedPaymentHeader,
     payload: {
       ...unsignedPaymentHeader.payload,
       signature,
-      ...(intentSignature ? { intentSignature } : {}), // Add intent signature if available
-      ...(serializedIntent ? { transactionIntent: serializedIntent } : {}), // Add transaction intent params if available
+      ...krnlFields, // Add KRNL intent fields if available (flat structure)
     },
   };
 }

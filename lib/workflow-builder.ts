@@ -107,63 +107,44 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   // Extract sender from payment payload
   const sender = authorization.from as Address;
   
-  // Extract transaction intent parameters from client payload
-  // Client provides BOTH the intent params (nonce, deadline, id) AND signature
-  // This ensures intent ID matches what client signed!
+  // Extract flat KRNL intent fields from client payload
+  // Client provides only the fields needed for DSL template replacement
   const payloadData = payload as any;
-  const clientIntent = payloadData.transactionIntent;
-  const intentSignature: Hex = payloadData.intentSignature;
+  const intentId: Hex | undefined = payloadData.intentId;
+  const intentSignature: Hex | undefined = payloadData.intentSignature;
+  const intentDeadline: string | undefined = payloadData.intentDeadline;
+  const intentDelegate: Address | undefined = payloadData.intentDelegate;
+  const intentTarget: Address | undefined = payloadData.intentTarget;
   
-  if (!clientIntent) {
-    console.error(`❌ No transaction intent provided by client`);
-    console.error(`   Client must include transactionIntent in payment payload`);
-    throw new Error('Missing transaction intent - client must provide intent parameters');
+  // Validate required KRNL fields
+  if (!intentId || !intentSignature || !intentDeadline || !intentDelegate || !intentTarget) {
+    console.error(`❌ Missing KRNL intent fields from client`);
+    console.error(`   Required: intentId, intentSignature, intentDeadline, intentDelegate, intentTarget`);
+    console.error(`   Received:`, { intentId, intentSignature, intentDeadline, intentDelegate, intentTarget });
+    throw new Error('Missing KRNL intent fields - client must provide all intent parameters');
   }
   
-  // Use client's intent parameters directly - DO NOT RECOMPUTE!
-  // Client computed intentId = keccak256(sender, nonce, deadline) at time T1
-  // If we recompute with new nonce/deadline at time T2, intentId will be different!
-  const transactionIntent: TransactionIntentParams = {
-    target: clientIntent.target as Address,
-    value: BigInt(clientIntent.value),
-    id: clientIntent.id as Hex,
-    nodeAddress: clientIntent.nodeAddress as Address,
-    delegate: clientIntent.delegate as Address,
-    targetFunction: clientIntent.targetFunction as Hex,
-    nonce: BigInt(clientIntent.nonce),
-    deadline: BigInt(clientIntent.deadline)
-  };
-  
-  console.log(`📝 Using client transaction intent:`);
-  console.log(`   ID: ${transactionIntent.id}`);
-  console.log(`   Nonce: ${transactionIntent.nonce.toString()}`);
-  console.log(`   Deadline: ${transactionIntent.deadline.toString()}`);
-  console.log(`   Delegate: ${transactionIntent.delegate}`);
-  console.log(`   Target: ${transactionIntent.target}`);
-  console.log(`   Node: ${transactionIntent.nodeAddress}`);
+  console.log(`📝 Using client KRNL intent fields:`);
+  console.log(`   Intent ID: ${intentId}`);
+  console.log(`   Signature: ${intentSignature.slice(0, 10)}...`);
+  console.log(`   Deadline: ${intentDeadline}`);
+  console.log(`   Delegate: ${intentDelegate}`);
+  console.log(`   Target: ${intentTarget}`);
   console.log(`   Sender: ${sender}`);
-  
-  if (!intentSignature || intentSignature === '0x') {
-    console.error(`❌ No intent signature provided by client`);
-    console.error(`   Client must sign transaction intent before sending payment`);
-    throw new Error('Missing intent signature - client must sign transaction intent');
-  }
-  
-  console.log(`✅ Using client-signed transaction intent: ${intentSignature.slice(0, 10)}...`);
 
   // Build template replacements object
   const replacements = {
     // Core workflow params
     CHAIN_ID: config.chainId.toString(),
     SENDER: sender,
-    DELEGATE: transactionIntent.delegate,  // Use client's delegate value!
+    DELEGATE: intentDelegate,  // Use client's delegate value!
     ATTESTOR_IMAGE: params.attestorImage,
-    TARGET_CONTRACT: transactionIntent.target,  // Use client's target value!
+    TARGET_CONTRACT: intentTarget,  // Use client's target value!
     
     // Intent params from client
-    INTENT_ID: transactionIntent.id,
+    INTENT_ID: intentId,
     INTENT_SIGNATURE: intentSignature,
-    INTENT_DEADLINE: transactionIntent.deadline.toString(),
+    INTENT_DEADLINE: intentDeadline,
     
     // Network configuration
     RPC_URL: params.rpcUrl,
@@ -190,7 +171,7 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   console.log(`📝 Building workflow from template with replacements:`);
   console.log(`   Chain ID: ${config.chainId}`);
   console.log(`   Sender: ${sender}`);
-  console.log(`   Intent ID: ${transactionIntent.id}`);
+  console.log(`   Intent ID: ${intentId}`);
   console.log(`   Using template: facilitator/workflow-template.json`);
 
   // Load and process template
