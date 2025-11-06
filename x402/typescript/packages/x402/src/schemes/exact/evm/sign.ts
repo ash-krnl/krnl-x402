@@ -53,6 +53,10 @@ export async function signAuthorization<transport extends Transport, chain exten
     },
   };
 
+  console.log('[SIGN] Domain:', JSON.stringify(data.domain, null, 2));
+  console.log('[SIGN] Message:', JSON.stringify(data.message, null, 2));
+  console.log('[SIGN] Signer (from):', from);
+
   if (isSignerWallet(walletClient)) {
     const signature = await walletClient.signTypedData(data);
     return {
