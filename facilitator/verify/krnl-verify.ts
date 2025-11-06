@@ -135,6 +135,14 @@ export async function verifyPaymentForKRNL(
       nonce: authorization.nonce,
     };
 
+    console.log('[VERIFY] Domain:', JSON.stringify(domain, null, 2));
+    console.log('[VERIFY] Message:', JSON.stringify(message, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value, 2
+    ));
+    console.log('[VERIFY] Signature:', signature);
+    console.log('[VERIFY] Signer address:', authorization.from);
+    console.log('[VERIFY] Payment requirements extra:', paymentRequirements.extra);
+
     const isValidSignature = await client.verifyTypedData({
       address: authorization.from as Address,
       domain,

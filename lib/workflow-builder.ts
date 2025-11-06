@@ -111,6 +111,9 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   // Client provides only the fields needed for DSL template replacement
   const payloadData = payload as any;
   
+  console.log('[workflow-builder] payload keys:', Object.keys(payloadData));
+  console.log('[workflow-builder] payload:', payloadData);
+  
   const intentId: Hex | undefined = payloadData.intentId;
   const intentSignature: Hex | undefined = payloadData.intentSignature;
   const intentDeadline: string | undefined = payloadData.intentDeadline;
