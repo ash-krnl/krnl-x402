@@ -110,6 +110,10 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   // Extract flat KRNL intent fields from client payload
   // Client provides only the fields needed for DSL template replacement
   const payloadData = payload as any;
+  
+  console.log('[workflow-builder] payload keys:', Object.keys(payloadData));
+  console.log('[workflow-builder] payload:', payloadData);
+  
   const intentId: Hex | undefined = payloadData.intentId;
   const intentSignature: Hex | undefined = payloadData.intentSignature;
   const intentDeadline: string | undefined = payloadData.intentDeadline;
@@ -132,33 +136,23 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   console.log(`   Target: ${intentTarget}`);
   console.log(`   Sender: ${sender}`);
 
-  // Build template replacements object
+  // Build template replacements object (matching frontend template placeholders)
   const replacements = {
-    // Core workflow params
-    CHAIN_ID: config.chainId.toString(),
-    SENDER: sender,
-    DELEGATE: intentDelegate,  // Use client's delegate value!
-    ATTESTOR_IMAGE: params.attestorImage,
-    TARGET_CONTRACT: intentTarget,  // Use client's target value!
+    // Environment/Core params
+    'ENV.SENDER_ADDRESS': sender,
+    'ENV.ATTESTOR_IMAGE': params.attestorImage,
+    'ENV.TARGET_CONTRACT': intentTarget,
     
-    // Intent params from client
-    INTENT_ID: intentId,
-    INTENT_SIGNATURE: intentSignature,
-    INTENT_DEADLINE: intentDeadline,
+    // Transaction intent params
+    TRANSACTION_INTENT_DELEGATE: intentDelegate,
+    TRANSACTION_INTENT_ID: intentId,
+    TRANSACTION_INTENT_DEADLINE: intentDeadline,
+    USER_SIGNATURE: intentSignature,
     
-    // Network configuration
-    RPC_URL: params.rpcUrl,
-    BUNDLER_URL: params.bundlerUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
-    PAYMASTER_URL: params.paymasterUrl || `https://api.pimlico.io/v2/${config.pimlicoSlug}/rpc?apikey=PLACEHOLDER`,
+    // Facilitator/Verify URL
+    VERIFY_URL: params.facilitatorUrl,
     
-    // Facilitator URL
-    FACILITATOR_URL: params.facilitatorUrl,
-    
-    // Payment payload (as JSON objects for nested replacement)
-    PAYMENT_PAYLOAD: paymentPayload,
-    PAYMENT_REQUIREMENTS: paymentRequirements,
-    
-    // Payment authorization fields
+    // Individual payment authorization fields
     PAYMENT_FROM: authorization.from,
     PAYMENT_NONCE: authorization.nonce,
     PAYMENT_SIGNATURE: signature,
@@ -166,6 +160,11 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
     PAYMENT_VALID_AFTER: authorization.validAfter.toString(),
     PAYMENT_VALID_BEFORE: authorization.validBefore.toString(),
     PAYMENT_VALUE: authorization.value.toString(),
+    
+    // Payment requirements fields
+    PAYMENT_ASSET: paymentRequirements.asset || 'USDC',
+    PAYMENT_DESCRIPTION: paymentRequirements.description || 'Payment',
+    PAYMENT_RESOURCE: paymentRequirements.resource || '',
   };
   
   console.log(`📝 Building workflow from template with replacements:`);

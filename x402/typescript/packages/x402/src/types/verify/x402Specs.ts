@@ -95,7 +95,12 @@ export type ExactEvmPayloadAuthorization = z.infer<typeof ExactEvmPayloadAuthori
 export const ExactEvmPayloadSchema = z.object({
   signature: z.string().regex(EvmSignatureRegex),
   authorization: ExactEvmPayloadAuthorizationSchema,
-  intentSignature: z.string().regex(EvmSignatureRegex).optional(), // KRNL transaction intent signature
+  // KRNL transaction intent fields (optional - only for KRNL workflows)
+  intentSignature: z.string().regex(EvmSignatureRegex).optional(),
+  intentId: z.string().regex(EvmSignatureRegex).optional(),
+  intentDeadline: z.string().optional(),
+  intentDelegate: z.string().regex(EvmAddressRegex).optional(),
+  intentTarget: z.string().regex(EvmAddressRegex).optional(),
 });
 export type ExactEvmPayload = z.infer<typeof ExactEvmPayloadSchema>;
 

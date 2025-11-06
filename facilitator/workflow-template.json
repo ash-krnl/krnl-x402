@@ -1,10 +1,10 @@
 {
-  "chain_id": "{{CHAIN_ID}}",
-  "sender": "{{SENDER}}",
-  "delegate": "{{DELEGATE}}",
-  "attestor": "{{ATTESTOR_IMAGE}}",
+  "chain_id": 11155111,
+  "sender": "{{ENV.SENDER_ADDRESS}}",
+  "delegate": "{{TRANSACTION_INTENT_DELEGATE}}",
+  "attestor": "{{ENV.ATTESTOR_IMAGE}}",
   "target": {
-    "contract": "{{TARGET_CONTRACT}}",
+    "contract": "{{ENV.TARGET_CONTRACT}}",
     "function": "executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))",
     "authData_result": "${x402-encode-payment-params.result}",
     "parameters": []
@@ -12,13 +12,13 @@
   "sponsor_execution_fee": true,
   "value": "0",
   "intent": {
-    "id": "{{INTENT_ID}}",
-    "signature": "{{INTENT_SIGNATURE}}",
-    "deadline": "{{INTENT_DEADLINE}}"
+    "id": "{{TRANSACTION_INTENT_ID}}",
+    "signature": "{{USER_SIGNATURE}}",
+    "deadline": "{{TRANSACTION_INTENT_DEADLINE}}"
   },
-  "rpc_url": "{{RPC_URL}}",
-  "bundler_url": "{{BUNDLER_URL}}",
-  "paymaster_url": "{{PAYMASTER_URL}}",
+  "rpc_url": "https://lb.drpc.live/sepolia/AnRM4mK1tEyphrn_jexSLbrPxqT4wGIR760VIlZWwHzR",
+  "bundler_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
+  "paymaster_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
   "gas_limit": "500000",
   "max_fee_per_gas": "20000000000",
   "max_priority_fee_per_gas": "2000000000",
@@ -29,18 +29,65 @@
       {
         "name": "x402-verify-payment",
         "image": "ghcr.io/krnl-labs/executor-http@sha256:07ef35b261014304a0163502a7f1dec5395c5cac1fc381dc1f79b052389ab0d5",
-        "attestor": "{{ATTESTOR_IMAGE}}",
+        "attestor": "{{ENV.ATTESTOR_IMAGE}}",
         "next": "x402-encode-payment-params",
         "inputs": {
-          "url": "{{FACILITATOR_URL}}/facilitator/verify",
+          "url": "{{VERIFY_URL}}/facilitator/verify",
           "method": "POST",
           "headers": {
             "Content-Type": "application/json",
             "x-krnl-internal": "true"
           },
           "body": {
-            "paymentPayload": "{{PAYMENT_PAYLOAD}}",
-            "paymentRequirements": "{{PAYMENT_REQUIREMENTS}}"
+            "paymentPayload": {
+              "network": "sepolia",
+              "payload": {
+                "authorization": {
+                  "from": "{{PAYMENT_FROM}}",
+                  "nonce": "{{PAYMENT_NONCE}}",
+                  "to": "{{PAYMENT_TO}}",
+                  "validAfter": "{{PAYMENT_VALID_AFTER}}",
+                  "validBefore": "{{PAYMENT_VALID_BEFORE}}",
+                  "value": "{{PAYMENT_VALUE}}"
+                },
+                "signature": "{{PAYMENT_SIGNATURE}}"
+              },
+              "scheme": "exact",
+              "x402Version": 1
+            },
+            "paymentRequirements": {
+              "asset": "{{PAYMENT_ASSET}}",
+              "description": "{{PAYMENT_DESCRIPTION}}",
+              "extra": {
+                "name": "USD Coin",
+                "version": "2"
+              },
+              "maxAmountRequired": "{{PAYMENT_VALUE}}",
+              "maxTimeoutSeconds": 60,
+              "mimeType": "",
+              "network": "sepolia",
+              "outputSchema": {
+                "input": {
+                  "discoverable": true,
+                  "method": "GET",
+                  "type": "http"
+                },
+                "output": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "payTo": "{{PAYMENT_TO}}",
+              "resource": "{{PAYMENT_RESOURCE}}",
+              "scheme": "exact"
+            }
           },
           "timeout": 30
         },
@@ -71,7 +118,7 @@
       {
         "name": "x402-encode-payment-params",
         "image": "ghcr.io/krnl-labs/executor-encoder-evm@sha256:b28823d12eb1b16cbcc34c751302cd2dbe7e35480a5bc20e4e7ad50a059b6611",
-        "attestor": "{{ATTESTOR_IMAGE}}",
+        "attestor": "{{ENV.ATTESTOR_IMAGE}}",
         "next": "prepare-authdata",
         "config": {
           "parameters": [

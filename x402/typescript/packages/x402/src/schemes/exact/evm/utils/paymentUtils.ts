@@ -19,6 +19,9 @@ export function encodePayment(payment: PaymentPayload): string {
   // evm
   if (SupportedEVMNetworks.includes(payment.network)) {
     const evmPayload = payment.payload as ExactEvmPayload;
+    console.log('[paymentUtils] evmPayload keys:', Object.keys(evmPayload));
+    console.log('[paymentUtils] evmPayload:', evmPayload);
+    
     safe = {
       ...payment,
       payload: {
@@ -31,6 +34,10 @@ export function encodePayment(payment: PaymentPayload): string {
         ) as ExactEvmPayload["authorization"],
       },
     };
+    
+    console.log('[paymentUtils] safe.payload keys:', Object.keys(safe.payload));
+    console.log('[paymentUtils] safe.payload:', safe.payload);
+    
     return safeBase64Encode(JSON.stringify(safe));
   }
 
@@ -53,6 +60,9 @@ export function decodePayment(payment: string): PaymentPayload {
   const decoded = safeBase64Decode(payment);
   const parsed = JSON.parse(decoded);
 
+  console.log('[decodePayment] parsed.payload keys:', Object.keys(parsed.payload));
+  console.log('[decodePayment] parsed.payload:', parsed.payload);
+
   let obj: PaymentPayload;
 
   // evm
@@ -73,6 +83,10 @@ export function decodePayment(payment: string): PaymentPayload {
     throw new Error("Invalid network");
   }
 
+  console.log('[decodePayment] obj.payload keys (before validation):', Object.keys(obj.payload));
   const validated = PaymentPayloadSchema.parse(obj);
+  console.log('[decodePayment] validated.payload keys (after validation):', Object.keys(validated.payload));
+  console.log('[decodePayment] validated.payload:', validated.payload);
+  
   return validated;
 }
