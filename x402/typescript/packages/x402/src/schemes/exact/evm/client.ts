@@ -67,13 +67,25 @@ export async function signPaymentHeader<transport extends Transport, chain exten
   const intentSignature = (client as any).intentSignature;
   const transactionIntent = (client as any).transactionIntent;
 
+  // Convert BigInt values to strings for JSON serialization
+  const serializedIntent = transactionIntent ? {
+    target: transactionIntent.target,
+    value: transactionIntent.value.toString(),
+    id: transactionIntent.id,
+    nodeAddress: transactionIntent.nodeAddress,
+    delegate: transactionIntent.delegate,
+    targetFunction: transactionIntent.targetFunction,
+    nonce: transactionIntent.nonce.toString(),
+    deadline: transactionIntent.deadline.toString(),
+  } : undefined;
+
   return {
     ...unsignedPaymentHeader,
     payload: {
       ...unsignedPaymentHeader.payload,
       signature,
       ...(intentSignature ? { intentSignature } : {}), // Add intent signature if available
-      ...(transactionIntent ? { transactionIntent } : {}), // Add transaction intent params if available
+      ...(serializedIntent ? { transactionIntent: serializedIntent } : {}), // Add transaction intent params if available
     },
   };
 }
