@@ -9,6 +9,7 @@
     "build": "tsc",
     "serve": "node dist/index.js",
     "test:client": "tsx test/client.ts",
+    "test:client-privy": "tsx test/client-privy-manual.ts",
     "test:server": "tsx test/server.ts",
     "test:integration": "tsx test/integration-simple.ts",
     "test": "npm run test:integration"

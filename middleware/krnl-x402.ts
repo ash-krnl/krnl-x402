@@ -93,6 +93,7 @@ export async function krnlX402Middleware(
 
   // Build workflow DSL for atomic verify + settle
   // IMPORTANT: delegateAddress = TARGET_CONTRACT_OWNER, nodeAddress = from KRNL config
+  // Client provides intent signature in payment payload - no facilitator signing
   const workflowParams: X402WorkflowParams = {
     paymentPayload,
     paymentRequirements,
@@ -104,7 +105,7 @@ export async function krnlX402Middleware(
     rpcUrl: config.rpcUrl,
     bundlerUrl: config.bundlerUrl,
     paymasterUrl: config.paymasterUrl,
-    privateKey: process.env.PRIVATE_KEY, // For signing transaction intent
+    // Note: No privateKey - client signs intent and includes in payload
   };
 
   const workflowDSL = await buildX402VerifySettleWorkflow(workflowParams);

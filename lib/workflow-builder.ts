@@ -1,7 +1,6 @@
 import type { WorkflowDSL, WorkflowStep } from './krnl-client';
 import type { PaymentPayload, PaymentRequirements } from '../x402/typescript/packages/x402/src/types/index';
 import { keccak256, encodePacked, type Hex, type Address, createPublicClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia, baseSepolia, optimismSepolia, arbitrumSepolia } from 'viem/chains';
 
 /**
@@ -71,55 +70,12 @@ function getFunctionSelector(): Hex {
 }
 
 /**
- * Sign a transaction intent for KRNL workflow execution
- * Matches the frontend pattern from KRNL SDK (@krnl-dev/sdk-react-7702)
+ * Note: Transaction intent signing is now done by the CLIENT
+ * The client signs the intent with their key (e.g., Privy session key)
+ * and includes it in the payment payload.
  * 
- * Frontend equivalent: signTransactionIntent(transactionIntent)
+ * This workflow builder simply extracts the client's signature.
  */
-async function signTransactionIntent(
-  transactionIntent: TransactionIntentParams,
-  sender: Address,
-  privateKey: Hex,
-  chainId: number
-): Promise<Hex> {
-  const account = privateKeyToAccount(privateKey);
-  
-  // EIP-712 domain for KRNL transaction intents
-  // Matches KRNL SDK domain configuration
-  const domain = {
-    name: 'KRNL',
-    version: '1',
-    chainId,
-  } as const;
-  
-  // Transaction intent type
-  // Matches KRNL SDK EIP-712 types
-  const types = {
-    TransactionIntent: [
-      { name: 'id', type: 'bytes32' },
-      { name: 'sender', type: 'address' },
-      { name: 'target', type: 'address' },
-      { name: 'delegate', type: 'address' },
-      { name: 'deadline', type: 'uint256' },
-    ],
-  } as const;
-  
-  // Sign the transaction intent using EIP-712
-  const signature = await account.signTypedData({
-    domain,
-    types,
-    primaryType: 'TransactionIntent',
-    message: {
-      id: transactionIntent.id,
-      sender,
-      target: transactionIntent.target,
-      delegate: transactionIntent.delegate,
-      deadline: transactionIntent.deadline,
-    },
-  });
-  
-  return signature;
-}
 
 export interface X402WorkflowParams {
   paymentPayload: PaymentPayload;
@@ -132,7 +88,7 @@ export interface X402WorkflowParams {
   rpcUrl: string; // RPC endpoint
   bundlerUrl?: string; // Optional bundler URL
   paymasterUrl?: string; // Optional paymaster URL
-  privateKey?: string; // Private key for signing transaction intent
+  // Note: No privateKey needed - client signs intent and includes in payload
 }
 
 // Minimal ABI for reading nonces from target contract
@@ -347,20 +303,18 @@ export async function buildX402VerifySettleWorkflow(params: X402WorkflowParams):
   
   console.log(`📝 Created transaction intent - ID: ${transactionIntent.id}, sender: ${sender}, deadline: ${deadline}`);
   
-  // Sign the transaction intent - MATCHES FRONTEND PATTERN
-  // Frontend: const signature = await signTransactionIntent(transactionIntent);
-  let intentSignature: Hex = '0x';
-  if (params.privateKey) {
-    intentSignature = await signTransactionIntent(
-      transactionIntent,
-      sender,
-      params.privateKey as Hex,
-      config.chainId
-    );
-    console.log(`✍️  Signed transaction intent - signature: ${intentSignature.slice(0, 10)}...`);
-  } else {
-    console.warn(`⚠️  No private key provided - using empty signature`);
+  // Extract intent signature from payment payload (signed by client)
+  // Client MUST sign the transaction intent with their key (e.g., Privy session key)
+  const payloadData = payload as any;
+  const intentSignature: Hex = payloadData.intentSignature;
+  
+  if (!intentSignature || intentSignature === '0x') {
+    console.error(`❌ No intent signature provided by client`);
+    console.error(`   Client must sign transaction intent before sending payment`);
+    throw new Error('Missing intent signature - client must sign transaction intent');
   }
+  
+  console.log(`✅ Using client-signed transaction intent: ${intentSignature.slice(0, 10)}...`);
 
   // Build the complete workflow DSL with actual values
   const workflow: WorkflowDSL = {
