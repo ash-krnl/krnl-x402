@@ -6,8 +6,7 @@
   "target": {
     "contract": "{{ENV.TARGET_CONTRACT}}",
     "function": "executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))",
-    "authData_result": "${x402-encode-payment-params.result}",
-    "parameters": []
+    "authData_result": "${x402-encode-payment-params.result}"
   },
   "sponsor_execution_fee": true,
   "value": "0",
