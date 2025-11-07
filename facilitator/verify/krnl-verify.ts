@@ -6,6 +6,7 @@ import type { PaymentPayload, PaymentRequirements, VerifyResponse } from '../../
  * Custom verify implementation for KRNL workflows
  * 
  * This implements the x402 SDK verify logic but with support for testnet networks.
+ * Primary testnet: Base Sepolia
  */
 
 // Network to chain mapping with extended support
@@ -20,7 +21,7 @@ const NETWORK_CONFIG: Record<string, {
     chain: baseSepolia,
     chainId: 84532,
     usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // USDC on Base Sepolia
-    usdcName: 'USD Coin',
+    usdcName: 'USDC',
     usdcVersion: '2',
   },
   'optimism-sepolia': {

@@ -1,5 +1,5 @@
 {
-  "chain_id": 11155111,
+  "chain_id": 84532,
   "sender": "{{ENV.SENDER_ADDRESS}}",
   "delegate": "{{TRANSACTION_INTENT_DELEGATE}}",
   "attestor": "{{ENV.ATTESTOR_IMAGE}}",

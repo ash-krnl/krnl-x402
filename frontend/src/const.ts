@@ -50,14 +50,21 @@ export const CHAIN_CONFIG = {
     rpcUrl: 'https://rpc-amoy.polygon.technology',
     explorerUrl: 'https://amoy.polygonscan.com',
   },
+  BASE_SEPOLIA: {
+    id: 84532,
+    name: 'Base Sepolia',
+    currency: 'ETH',
+    rpcUrl: 'https://sepolia.base.org',
+    explorerUrl: 'https://sepolia.basescan.org',
+  },
 } as const;
 
 // ==================== ENVIRONMENT CONSTANTS ====================
 
-export const DEFAULT_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID || '80002');
+export const DEFAULT_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID || '84532');
 export const DEFAULT_CHAIN = Object.values(CHAIN_CONFIG).find(
   chain => chain.id === DEFAULT_CHAIN_ID
-) || CHAIN_CONFIG.POLYGON_AMOY;
+) || CHAIN_CONFIG.BASE_SEPOLIA;
 
 export const RPC_URL = import.meta.env.VITE_RPC_URL || DEFAULT_CHAIN.rpcUrl;
 
