@@ -58,7 +58,7 @@
               "asset": "{{PAYMENT_ASSET}}",
               "description": "{{PAYMENT_DESCRIPTION}}",
               "extra": {
-                "name": "USD Coin",
+                "name": "USDC",
                 "version": "2"
               },
               "maxAmountRequired": "{{PAYMENT_VALUE}}",

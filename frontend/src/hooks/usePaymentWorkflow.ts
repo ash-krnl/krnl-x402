@@ -228,7 +228,7 @@ export const usePaymentWorkflow = () => {
     // EIP-712 domain for USDC (EIP-3009)
     // Must match the USDC contract's domain
     const domain = {
-      name: 'USD Coin',
+      name: 'USDC',
       version: '2',
       chainId: DEFAULT_CHAIN_ID,
       verifyingContract: asset,
