@@ -18,10 +18,9 @@ import { sepolia } from 'viem/chains';
 import { wrapFetchWithPayment, decodeXPaymentResponse } from '../x402/typescript/packages/x402-fetch/src/index';
 import _fetch from 'node-fetch';
 import { createKRNLClient } from '../lib/krnl-client';
-import crypto from 'crypto';
 import path from 'path';
-import canonicalize from 'canonicalize';
 import type { TransactionIntentParams } from '../sdk-react-7702/src/types';
+import { PrivyClient, type AuthorizationContext } from '@privy-io/node';
 
 // Load environment variables from test/.env.local
 config({ path: path.join(__dirname, '.env.local') });
@@ -63,182 +62,90 @@ if (!TARGET_CONTRACT_ADDRESS || !TARGET_CONTRACT_OWNER) {
 }
 
 /**
- * Privy Account Adapter with Session Signers
- * 
+ * Privy Account Adapter using Official Node SDK
+ *
  * Implements the viem Account interface for use with x402-fetch.
- * Uses Privy's authorization keys for secure, scoped signing.
- * 
+ * Uses Privy's Node SDK for secure, reliable signing.
+ *
  * The x402-fetch wrapper will call signMessage() and signTypedData()
  * to handle payment authorization and intent signing automatically.
- * 
- * Reference: https://docs.privy.io/controls/authorization-keys/using-owners/sign/automatic
+ *
+ * Reference: https://docs.privy.io/wallets/wallet-management/sign-message
  */
 class PrivySessionSignerAccount implements Account {
   public address: Address;
   public type = 'local' as const;
-  public source = 'privy-session-signer' as const;
+  public source = 'privy-node-sdk' as const;
   public publicKey: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000';
-  
+
   public intentSignature?: Hex; // KRNL transaction intent signature
   public transactionIntent?: TransactionIntentParams; // Full intent params for facilitator
-  
+
+  private privyClient: PrivyClient;
+  private authorizationContext: AuthorizationContext;
+
   constructor(
-    private appId: string,
-    private appSecret: string,
-    private authorizationPrivateKey: string,
     private walletId: string,
-    walletAddress: string
+    walletAddress: string,
+    privyClient: PrivyClient,
+    authorizationPrivateKey: string
   ) {
     this.address = walletAddress as Address;
+    this.privyClient = privyClient;
+    this.authorizationContext = {
+      authorization_private_keys: [authorizationPrivateKey]
+    };
   }
   
   /**
-   * Generate authorization signature for Privy API calls
-   * Matches Privy's exact implementation with JSON canonicalization
-   * Ref: https://docs.privy.io/controls/authorization-keys/using-owners/sign/direct-implementation
-   */
-  private generateAuthorizationSignature(input: {
-    version: 1;
-    url: string;
-    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'GET';
-    headers: Record<string, string>;
-    body?: any;
-  }): string {
-    const payload = {
-      version: input.version,
-      method: input.method,
-      url: input.url,
-      body: input.body || null,
-      headers: input.headers,
-    };
-    
-    // JSON-canonicalize the payload (RFC 8785) - REQUIRED by Privy
-    const serializedPayload = canonicalize(payload) as string;
-    const serializedPayloadBuffer = Buffer.from(serializedPayload);
-    
-    // Convert private key to PEM format
-    const privateKeyAsPem = `-----BEGIN PRIVATE KEY-----\n${this.authorizationPrivateKey}\n-----END PRIVATE KEY-----`;
-    const privateKey = crypto.createPrivateKey({
-      key: privateKeyAsPem,
-      format: 'pem',
-    });
-    
-    // Sign with SHA-256
-    const signatureBuffer = crypto.sign('sha256', serializedPayloadBuffer, privateKey);
-    
-    return signatureBuffer.toString('base64');
-  }
-  
-  /**
-   * Call Privy RPC API directly
-   */
-  private async callPrivyRPC(method: string, params: any[] | Record<string, any>, includeChainType = true): Promise<any> {
-    const url = `https://api.privy.io/v1/wallets/${this.walletId}/rpc`;
-    const body: any = { 
-      method, 
-      params 
-    };
-    
-    // Only include chain_type for certain methods (e.g., personal_sign)
-    if (includeChainType) {
-      body.chain_type = 'ethereum';
-    }
-    
-    // Basic Auth: base64(appId:appSecret)
-    const basicAuth = Buffer.from(`${this.appId}:${this.appSecret}`).toString('base64');
-    
-    // IMPORTANT: Only include headers that start with 'privy-' or 'content-type' in signature
-    // Per Privy docs: https://docs.privy.io/controls/authorization-keys/using-owners/sign
-    const headersForSignature = {
-      'privy-app-id': this.appId,
-      // Don't include Authorization or origin in signature!
-    };
-    
-    const authSignature = this.generateAuthorizationSignature({
-      version: 1,
-      url,
-      method: 'POST',
-      headers: headersForSignature,
-      body,
-    });
-    
-    const response = await _fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${basicAuth}`,       // Send but don't sign
-        'privy-app-id': this.appId,                  // Send and signed
-        'privy-authorization-signature': authSignature,
-        'origin': 'http://localhost:4000',           // Send but don't sign
-      },
-      body: JSON.stringify(body),
-    });
-    
-    const result: any = await response.json();
-    
-    if (result.error) {
-      throw new Error(`Privy RPC error: ${result.error.message || result.error}`);
-    }
-    
-    // Privy returns: { method: "...", data: { signature: "0x..." } }
-    if (result.data?.signature) {
-      return result.data.signature;
-    }
-    
-    // Fallback for other response formats
-    if (result.result) {
-      return result.result;
-    }
-    
-    console.error('Unexpected Privy RPC response:', JSON.stringify(result, null, 2));
-    throw new Error('Privy RPC returned unexpected response format');
-  }
-  
-  /**
-   * Sign a message (EIP-191) using Privy RPC API directly
+   * Sign a message (EIP-191) using Privy Node SDK
    */
   async signMessage({ message }: { message: SignableMessage }): Promise<Hex> {
     let messageToSign: string;
-    
+
     if (typeof message === 'string') {
       messageToSign = message;
     } else if (message instanceof Uint8Array) {
       messageToSign = `0x${Buffer.from(message).toString('hex')}`;
     } else if ('raw' in message) {
-      messageToSign = typeof message.raw === 'string' 
-        ? message.raw 
+      messageToSign = typeof message.raw === 'string'
+        ? message.raw
         : `0x${Buffer.from(message.raw).toString('hex')}`;
     } else {
       throw new Error('Unsupported message format');
     }
-    
-    // Call Privy RPC API with correct format
-    const signature = await this.callPrivyRPC('personal_sign', {
+
+    // Use Privy Node SDK
+    const response = await this.privyClient.wallets().ethereum().signMessage(this.walletId, {
       message: messageToSign,
-      encoding: 'hex',
+      authorization_context: this.authorizationContext
     });
-    return signature as Hex;
+
+    return response.signature as Hex;
   }
   
   /**
-   * Sign typed data (EIP-712) using Privy RPC API directly
-   * Reference: https://docs.privy.io/wallets/using-wallets/ethereum/sign-typed-data
+   * Sign typed data (EIP-712) using Privy Node SDK
+   * Reference: https://docs.privy.io/wallets/wallet-management/sign-typed-data
    */
   async signTypedData(typedData: any): Promise<Hex> {
-    // Transform primaryType to primary_type if needed
+    // Format for Privy Node SDK - use the exact structure from the reference
     const formattedTypedData = {
-      types: typedData.types,
-      message: typedData.message,
-      primary_type: typedData.primaryType || typedData.primary_type,
       domain: typedData.domain,
+      types: typedData.types,
+      primary_type: typedData.primaryType || typedData.primary_type,
+      message: typedData.message,
     };
-    
-    // Call Privy RPC API - no chain_type for eth_signTypedData_v4
-    const signature = await this.callPrivyRPC('eth_signTypedData_v4', {
-      typed_data: formattedTypedData,
-    }, false);
-    
-    return signature as Hex;
+
+    // Use Privy Node SDK with correct API structure
+    const response = await this.privyClient.wallets().ethereum().signTypedData(this.walletId, {
+      params: {
+        typed_data: formattedTypedData
+      },
+      authorization_context: this.authorizationContext
+    });
+
+    return response.signature as Hex;
   }
   
   /**
@@ -269,94 +176,17 @@ class PrivySessionSignerAccount implements Account {
  */
 
 /**
- * ABI type definitions matching frontend
- */
-interface ABIInput {
-  name: string;
-  type: string;
-  internalType?: string;
-  components?: ABIInput[];
-}
-
-interface ABIFunction {
-  name: string;
-  type: string;
-  inputs: ABIInput[];
-  outputs: any[];
-}
-
-/**
- * Payment Contract ABI - executePayment function only
- */
-const PAYMENT_CONTRACT_ABI: ABIFunction[] = [{
-  name: 'executePayment',
-  type: 'function',
-  inputs: [{
-    name: 'authData',
-    type: 'tuple',
-    internalType: 'struct TargetBase.AuthData',
-    components: [
-      { name: 'nonce', type: 'uint256', internalType: 'uint256' },
-      { name: 'expiry', type: 'uint256', internalType: 'uint256' },
-      { name: 'id', type: 'bytes32', internalType: 'bytes32' },
-      {
-        name: 'executions',
-        type: 'tuple[]',
-        internalType: 'struct TargetBase.Execution[]',
-        components: [
-          { name: 'id', type: 'bytes32', internalType: 'bytes32' },
-          { name: 'request', type: 'bytes', internalType: 'bytes' },
-          { name: 'response', type: 'bytes', internalType: 'bytes' }
-        ]
-      },
-      { name: 'result', type: 'bytes', internalType: 'bytes' },
-      { name: 'sponsorExecutionFee', type: 'bool', internalType: 'bool' },
-      { name: 'signature', type: 'bytes', internalType: 'bytes' }
-    ]
-  }],
-  outputs: []
-}];
-
-/**
- * Build type string from ABI input - matches frontend implementation
- */
-function buildTypeString(input: ABIInput): string {
-  if (input.type === 'tuple') {
-    const components = input.components?.map((comp) => buildTypeString(comp)).join(',') || '';
-    return `(${components})`;
-  } else if (input.type === 'tuple[]') {
-    const components = input.components?.map((comp) => buildTypeString(comp)).join(',') || '';
-    return `(${components})[]`;
-  } else {
-    return input.type;
-  }
-}
-
-/**
- * Get function selector for executePayment - dynamically generated from ABI
- * Matches frontend implementation exactly
+ * Get function selector for executePayment - matches frontend implementation exactly
  */
 function getFunctionSelector(): Hex {
-  const targetFunctionName = 'executePayment';
-  
-  const targetFunctionSelector = PAYMENT_CONTRACT_ABI.find(
-    (item) => item.type === 'function' && item.name === targetFunctionName
-  );
-  
-  if (!targetFunctionSelector) {
-    throw new Error(`Function ${targetFunctionName} not found in ABI`);
-  }
-  
-  const functionSig = `${targetFunctionName}(${targetFunctionSelector.inputs.map((input) => buildTypeString(input)).join(',')})`;
-  const functionSelectorBytes = keccak256(encodePacked(['string'], [functionSig])).slice(0, 10) as Hex;
-  
-  if (functionSelectorBytes.length !== 10) {
-    throw new Error(`Invalid function selector length: ${functionSelectorBytes.length}`);
-  }
-  
-  console.log(`   Function signature: ${functionSig}`);
+  // Use the exact same hardcoded signature as frontend to avoid encoding differences
+  const functionSignature = 'executePayment((uint256,uint256,bytes32,(bytes32,bytes,bytes)[],bytes,bool,bytes))';
+  const hash = keccak256(Buffer.from(functionSignature));
+  const functionSelectorBytes = hash.slice(0, 10) as Hex;
+
+  console.log(`   Function signature: ${functionSignature}`);
   console.log(`   Function selector: ${functionSelectorBytes}`);
-  
+
   return functionSelectorBytes;
 }
 
@@ -523,28 +353,33 @@ function validateWalletConfig(): { walletId: string; address: string } {
 }
 
 /**
- * Create Privy session signer account for signing
+ * Create Privy session signer account using Node SDK
  */
 async function createPrivySessionSignerAccount() {
-  console.log(`🔐 Initializing Privy Session Signer...`);
-  
+  console.log(`🔐 Initializing Privy Node SDK...`);
+
   const wallet = validateWalletConfig();
-  
-  console.log(`✅ Using wallet with session signer:`);
+
+  // Initialize Privy Client
+  const privyClient = new PrivyClient({
+    appId: PRIVY_APP_ID!,
+    appSecret: PRIVY_APP_SECRET!
+  });
+
+  console.log(`✅ Using wallet with Node SDK:`);
   console.log(`   Wallet ID: ${wallet.walletId}`);
   console.log(`   Address: ${wallet.address}`);
   console.log(`   Auth Method: Session Signer (Authorization Key)`);
-  console.log(`   🎯 Using Privy REST API with authorization keys (no SDK needed!)\n`);
-  
-  // Create Privy account adapter with session signer (no SDK needed!)
+  console.log(`   🎯 Using Privy Node SDK for reliable signing!\n`);
+
+  // Create Privy account adapter with Node SDK
   const account = new PrivySessionSignerAccount(
-    PRIVY_APP_ID!,
-    PRIVY_APP_SECRET!,
-    PRIVY_AUTHORIZATION_PRIVATE_KEY!, // Authorization key for signing
     wallet.walletId,
-    wallet.address
+    wallet.address,
+    privyClient,
+    PRIVY_AUTHORIZATION_PRIVATE_KEY!
   );
-  
+
   return {
     account,
     address: wallet.address,

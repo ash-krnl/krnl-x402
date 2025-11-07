@@ -10,6 +10,7 @@
     "serve": "node dist/index.js",
     "test:client": "tsx test/client.ts",
     "test:client-privy": "tsx test/client-privy-manual.ts",
+    "test:client-privy-delegated": "tsx test/client-privy-delegated.ts",
     "test:server": "tsx test/server.ts",
     "test:integration": "tsx test/integration-simple.ts",
     "test": "npm run test:integration"
@@ -21,6 +22,7 @@
     "fastify"
   ],
   "dependencies": {
+    "@privy-io/node": "^0.4.0",
     "@scure/base": "^1.2.6",
     "@solana-program/compute-budget": "^0.8.0",
     "@solana-program/token": "^0.5.1",
