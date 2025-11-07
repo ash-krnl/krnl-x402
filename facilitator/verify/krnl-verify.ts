@@ -28,7 +28,7 @@ const NETWORK_CONFIG: Record<string, {
     chain: sepolia,
     chainId: 11155111,
     usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    usdcName: 'USD Coin',
+    usdcName: 'USDC',
     usdcVersion: '2',
   },
   'base-sepolia': {

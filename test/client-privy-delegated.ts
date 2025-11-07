@@ -137,6 +137,10 @@ class PrivySessionSignerAccount implements Account {
       message: typedData.message,
     };
 
+    console.log('🔐 Signing EIP-712 typed data with Privy...');
+    console.log('   Domain:', JSON.stringify(formattedTypedData.domain, null, 2));
+    console.log('   Message:', JSON.stringify(formattedTypedData.message, null, 2));
+
     // Use Privy Node SDK with correct API structure
     const response = await this.privyClient.wallets().ethereum().signTypedData(this.walletId, {
       params: {
@@ -145,7 +149,22 @@ class PrivySessionSignerAccount implements Account {
       authorization_context: this.authorizationContext
     });
 
-    return response.signature as Hex;
+    const signature = response.signature as Hex;
+    console.log('✅ Signature received:', signature);
+    console.log('   Length:', signature.length);
+
+    // Verify signature format - should be 132 chars (0x + 64 + 64 + 2)
+    if (signature.length !== 132) {
+      console.warn(`⚠️  Unexpected signature length: ${signature.length} (expected 132)`);
+    }
+
+    // Verify it starts with 0x
+    if (!signature.startsWith('0x')) {
+      console.warn(`⚠️  Signature missing 0x prefix`);
+      return `0x${signature}` as Hex;
+    }
+
+    return signature;
   }
   
   /**
