@@ -43,14 +43,21 @@ export const CHAIN_CONFIG = {
     rpcUrl: 'https://mainnet.optimism.io',
     explorerUrl: 'https://optimistic.etherscan.io',
   },
+  POLYGON_AMOY: {
+    id: 80002,
+    name: 'Polygon Amoy Testnet',
+    currency: 'MATIC',
+    rpcUrl: 'https://rpc-amoy.polygon.technology',
+    explorerUrl: 'https://amoy.polygonscan.com',
+  },
 } as const;
 
 // ==================== ENVIRONMENT CONSTANTS ====================
 
-export const DEFAULT_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID || '11155111');
+export const DEFAULT_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID || '80002');
 export const DEFAULT_CHAIN = Object.values(CHAIN_CONFIG).find(
   chain => chain.id === DEFAULT_CHAIN_ID
-) || CHAIN_CONFIG.SEPOLIA;
+) || CHAIN_CONFIG.POLYGON_AMOY;
 
 export const RPC_URL = import.meta.env.VITE_RPC_URL || DEFAULT_CHAIN.rpcUrl;
 

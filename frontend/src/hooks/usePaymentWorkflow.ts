@@ -13,7 +13,7 @@ import {
   type Hex,
   type Address
 } from 'viem';
-import { sepolia } from 'viem/chains';
+import { polygonAmoy } from 'viem/chains';
 import { useKRNL, useNodeConfig, type TransactionIntentParams, type PrivyEmbeddedWallet, type WorkflowObject } from '@krnl-dev/sdk-react-7702';
 import testScenarioData from '../test-scenario.json';
 import PaymentContractABI from '../contracts/PaymentContract.abi.json';
@@ -50,7 +50,7 @@ export const usePaymentWorkflow = () => {
     }
 
     const publicClient = createPublicClient({
-      chain: sepolia,
+      chain: polygonAmoy,
       transport: http(RPC_URL)
     });
 
@@ -69,7 +69,7 @@ export const usePaymentWorkflow = () => {
       const provider = await embeddedWallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: embeddedWallet.address as `0x${string}`,
-        chain: sepolia,
+        chain: polygonAmoy,
         transport: custom(provider)
       });
 
@@ -87,7 +87,7 @@ export const usePaymentWorkflow = () => {
 
   const getContractNonce = async (embeddedWallet: PrivyEmbeddedWallet): Promise<bigint> => {
     const client = createPublicClient({
-      chain: sepolia,
+      chain: polygonAmoy,
       transport: http(RPC_URL)
     });
 
@@ -221,7 +221,7 @@ export const usePaymentWorkflow = () => {
     const provider = await embeddedWallet.getEthereumProvider();
     const walletClient = createWalletClient({
       account: embeddedWallet.address as Address,
-      chain: sepolia,
+      chain: polygonAmoy,
       transport: custom(provider)
     });
 
@@ -283,7 +283,7 @@ export const usePaymentWorkflow = () => {
 
     try {
       const embeddedWallet = getEmbeddedWallet();
-      await embeddedWallet.switchChain?.(11155111);
+      await embeddedWallet.switchChain?.(80002);
 
       // Generate payment authorization details
       const paymentNonce = createPaymentNonce();

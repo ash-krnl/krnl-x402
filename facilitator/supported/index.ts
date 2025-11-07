@@ -43,6 +43,15 @@ export async function getSupportedPaymentKinds(
         scheme: 'exact',
         network: 'base',
       },
+      {
+        x402Version: 1,
+        scheme: 'exact',
+        network: 'polygon-amoy',
+        extra: {
+          name: 'USDC',
+          version: '2',
+        },
+      },
     ],
   };
 

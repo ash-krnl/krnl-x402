@@ -60,11 +60,6 @@ export const config: Record<string, ChainConfig> = {
     usdcAddress: "0xe4C7fBB0a626ed208021ccabA6Be1566905E2dFc",
     usdcName: "Bridged USDC",
   },
-  // Ethereum Sepolia testnet
-  "11155111": {
-    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    usdcName: "USDC",
-  },
 };
 
 export type ChainConfig = {

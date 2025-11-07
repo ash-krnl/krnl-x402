@@ -1,12 +1,11 @@
 import { createPublicClient, http, type Address, type Chain, getAddress } from 'viem';
-import { sepolia, baseSepolia, optimismSepolia, arbitrumSepolia } from 'viem/chains';
+import { baseSepolia, optimismSepolia, arbitrumSepolia, polygonAmoy } from 'viem/chains';
 import type { PaymentPayload, PaymentRequirements, VerifyResponse } from '../../x402/typescript/packages/x402/src/types/index';
 
 /**
  * Custom verify implementation for KRNL workflows
  * 
- * This implements the x402 SDK verify logic but with support for additional networks
- * like Ethereum Sepolia that aren't in the official SDK.
+ * This implements the x402 SDK verify logic but with support for testnet networks.
  */
 
 // Network to chain mapping with extended support
@@ -17,20 +16,6 @@ const NETWORK_CONFIG: Record<string, {
   usdcName: string;
   usdcVersion: string;
 }> = {
-  'sepolia': {
-    chain: sepolia,
-    chainId: 11155111,
-    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // USDC on Sepolia
-    usdcName: 'USD Coin',
-    usdcVersion: '2',
-  },
-  'ethereum-sepolia': {
-    chain: sepolia,
-    chainId: 11155111,
-    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    usdcName: 'USDC',
-    usdcVersion: '2',
-  },
   'base-sepolia': {
     chain: baseSepolia,
     chainId: 84532,
@@ -50,6 +35,13 @@ const NETWORK_CONFIG: Record<string, {
     chainId: 421614,
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', // USDC on Arbitrum Sepolia
     usdcName: 'USD Coin',
+    usdcVersion: '2',
+  },
+  'polygon-amoy': {
+    chain: polygonAmoy,
+    chainId: 80002,
+    usdcAddress: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', // USDC on Polygon Amoy
+    usdcName: 'USDC',
     usdcVersion: '2',
   },
 };

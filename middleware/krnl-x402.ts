@@ -180,7 +180,7 @@ function getChainId(network: string): number {
 export function createKRNLX402Config(): KRNLX402Config {
   return {
     nodeUrl: process.env.KRNL_NODE_URL || 'https://node.krnl.xyz',
-    rpcUrl: process.env.RPC_URL || 'https://lb.drpc.org/sepolia/AnRM4mK1tEyphrn_jexSLbrPxqT4wGIR760VIlZWwHzR',
+    rpcUrl: process.env.RPC_URL || 'https://rpc-amoy.polygon.technology',
     bundlerUrl: process.env.BUNDLER_URL,
     paymasterUrl: process.env.PAYMASTER_URL,
     attestorImage: process.env.ATTESTOR_IMAGE || 'ghcr.io/krnl-labs/attestor:latest',
