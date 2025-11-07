@@ -14,7 +14,7 @@
 
 import { config } from 'dotenv';
 import { type Hex, type Address, type Account, type SignableMessage, keccak256, encodePacked, createPublicClient, http } from 'viem';
-import { sepolia } from 'viem/chains';
+import { polygonAmoy } from 'viem/chains';
 import { wrapFetchWithPayment, decodeXPaymentResponse } from '../x402/typescript/packages/x402-fetch/src/index';
 import _fetch from 'node-fetch';
 import { createKRNLClient } from '../lib/krnl-client';
@@ -33,10 +33,10 @@ const PRIVY_WALLET_ID = process.env.PRIVY_WALLET_ID; // Wallet ID
 const PRIVY_WALLET_ADDRESS = process.env.PRIVY_WALLET_ADDRESS; // Wallet address
 const TEST_SERVER_URL = process.env.TEST_SERVER_URL || 'http://localhost:4000';
 const KRNL_NODE_URL = process.env.KRNL_NODE_URL || 'https://node.krnl.xyz';
-const RPC_URL = process.env.RPC_URL || 'https://lb.drpc.org/sepolia/AnRM4mK1tEyphrn_jexSLbrPxqT4wGIR760VIlZWwHzR';
+const RPC_URL = process.env.RPC_URL || 'https://rpc-amoy.polygon.technology';
 const TARGET_CONTRACT_ADDRESS = process.env.TARGET_CONTRACT_ADDRESS as Address;
 const TARGET_CONTRACT_OWNER = process.env.TARGET_CONTRACT_OWNER as Address;
-const DEFAULT_CHAIN_ID = 11155111; // Sepolia
+const DEFAULT_CHAIN_ID = 80002; // Polygon Amoy
 
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) {
   console.error('❌ Missing PRIVY_APP_ID or PRIVY_APP_SECRET in .env');
