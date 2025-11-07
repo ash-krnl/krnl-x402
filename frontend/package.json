@@ -26,7 +26,8 @@
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.8.2",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.13"
+    "tailwindcss": "^4.1.13",
+    "x402-fetch": "file:../x402/typescript/packages/x402-fetch"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

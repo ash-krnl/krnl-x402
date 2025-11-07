@@ -1,7 +1,8 @@
 import { usePrivy } from '@privy-io/react-auth';
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
+import { LogOut, TestTube2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useWalletBalance } from '@/hooks/useWalletBalance';
 import { useKRNL } from '@krnl-dev/sdk-react-7702';
 import { usePaymentWorkflow } from '@/hooks/usePaymentWorkflow';
@@ -20,6 +21,7 @@ import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   const { logout } = usePrivy();
+  const navigate = useNavigate();
   const { balance, isLoading: balanceLoading, wallet: embeddedWallet, chainInfo, isSwitching, refetch } = useWalletBalance();
   const {
     isAuthorized,
@@ -151,6 +153,9 @@ const Dashboard = () => {
             <h1 className="text-xl font-semibold">X402 Payment Settlement</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-muted-foreground">{formatAddress(embeddedWallet?.address)}</span>
+              <Button onClick={() => navigate('/test-client')} variant="outline" size="sm">
+                <TestTube2 className="mr-2 h-4 w-4" />Test Client
+              </Button>
               <Button onClick={() => logout()} variant="outline" size="sm">
                 <LogOut className="mr-2 h-4 w-4" />Disconnect
               </Button>

@@ -16,7 +16,7 @@
     "signature": "{{USER_SIGNATURE}}",
     "deadline": "{{TRANSACTION_INTENT_DEADLINE}}"
   },
-  "rpc_url": "https://eth-sepolia.public.blastapi.io",
+  "rpc_url": "https://lb.drpc.live/sepolia/AnRM4mK1tEyphrn_jexSLbrPxqT4wGIR760VIlZWwHzR",
   "bundler_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
   "paymaster_url": "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_BzvhxN6qyxTquJcRKcbFdK",
   "gas_limit": "500000",

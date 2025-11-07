@@ -11,6 +11,7 @@ import { Toaster } from 'react-hot-toast';
 // Lazy load pages for better performance
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const TestClient = lazy(() => import('./pages/TestClient'));
 
 // Loading component for Suspense fallback
 const PageLoader = () => (
@@ -39,6 +40,7 @@ function App() {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<MainApp />} />
+                <Route path="/test-client" element={<TestClient />} />
               </Routes>
             </Suspense>
           </Router>
