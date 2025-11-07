@@ -27,6 +27,15 @@ export async function getSupportedPaymentKinds(
       {
         x402Version: 1,
         scheme: 'exact',
+        network: 'sepolia',
+        extra: {
+          name: 'USDC',
+          version: '2',
+        },
+      },
+      {
+        x402Version: 1,
+        scheme: 'exact',
         network: 'base-sepolia',
       },
       {
