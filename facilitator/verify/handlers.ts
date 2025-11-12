@@ -60,11 +60,13 @@ export async function postVerifyPayment(
       console.log(`✅ Payment verification: ${verifyResult.isValid ? 'VALID' : 'INVALID'}`);
       return verifyResult;
     } else {
-      // EXTERNAL: Client request - start KRNL atomic workflow
-      console.log(`📋 External verify request - starting KRNL workflow for network: ${network}`);
+      // EXTERNAL: Client request - start KRNL workflow (now supports EIP-4337)
+      console.log(`📋 External verify request - starting KRNL EIP-4337 workflow for network: ${network}`);
+
+      // Use existing KRNL middleware (updated to work with EIP-4337 intent params)
       const krnlConfig = createKRNLX402Config();
       const krnlResult = await krnlX402Middleware(request, reply, krnlConfig);
-      
+
       if (krnlResult) {
         console.log('✅ KRNL workflow started successfully');
         return krnlResult;
@@ -76,9 +78,7 @@ export async function postVerifyPayment(
       return {
         isValid: false,
         invalidReason: 'unexpected_verify_error',
-        payer: 'authorization' in paymentPayload.payload
-          ? (paymentPayload.payload as any).authorization?.from
-          : undefined,
+        payer: payload.authorization?.from,
       } as VerifyResponse;
     }
   } catch (error) {

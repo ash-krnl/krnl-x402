@@ -1,5 +1,5 @@
 import { createPublicClient, http, type Address, type Chain, getAddress } from 'viem';
-import { baseSepolia, optimismSepolia, arbitrumSepolia, polygonAmoy } from 'viem/chains';
+import { sepolia, baseSepolia, optimismSepolia, arbitrumSepolia, polygonAmoy } from 'viem/chains';
 import type { PaymentPayload, PaymentRequirements, VerifyResponse } from '../../x402/typescript/packages/x402/src/types/index';
 
 /**
@@ -17,6 +17,13 @@ const NETWORK_CONFIG: Record<string, {
   usdcName: string;
   usdcVersion: string;
 }> = {
+  'ethereum-sepolia': {
+    chain: sepolia,
+    chainId: 11155111,
+    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // USDC on Ethereum Sepolia
+    usdcName: 'USDC',
+    usdcVersion: '2',
+  },
   'base-sepolia': {
     chain: baseSepolia,
     chainId: 84532,

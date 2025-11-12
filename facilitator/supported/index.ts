@@ -27,10 +27,11 @@ export async function getSupportedPaymentKinds(
       {
         x402Version: 1,
         scheme: 'exact',
-        network: 'sepolia',
+        network: 'ethereum-sepolia',
         extra: {
           name: 'USDC',
           version: '2',
+          factoryAddress: '0xc940d3c6eB25A2b8380c78C7325B658c18317036', // EIP-4337 Smart Account Factory
         },
       },
       {
