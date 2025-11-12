@@ -39,7 +39,7 @@
           },
           "body": {
             "paymentPayload": {
-              "network": "sepolia",
+              "network": "ethereum-sepolia",
               "payload": {
                 "authorization": {
                   "from": "{{PAYMENT_FROM}}",
@@ -64,7 +64,7 @@
               "maxAmountRequired": "{{PAYMENT_VALUE}}",
               "maxTimeoutSeconds": 60,
               "mimeType": "",
-              "network": "sepolia",
+              "network": "ethereum-sepolia",
               "outputSchema": {
                 "input": {
                   "discoverable": true,
