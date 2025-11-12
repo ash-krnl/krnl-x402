@@ -1,4 +1,4 @@
-import { Chain, getAddress, Hex, LocalAccount, toHex, Transport } from "viem";
+import { Chain, getAddress, Hex, LocalAccount, toHex, Transport, keccak256, encodeAbiParameters, parseAbiParameters, encodePacked } from "viem";
 import { getNetworkId } from "../../../shared";
 import {
   authorizationTypes,
@@ -57,18 +57,70 @@ export async function signAuthorization<transport extends Transport, chain exten
   console.log('[SIGN] Message:', JSON.stringify(data.message, null, 2));
   console.log('[SIGN] Signer (from):', from);
 
+  // Manually compute EIP-712 hash (for EIP-1271 smart contract wallet compatibility)
+  const TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+    toHex('TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)')
+  );
+
+  // Compute EIP-712 domain separator
+  const domainSeparator = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters('bytes32, bytes32, bytes32, uint256, address'),
+      [
+        keccak256(toHex('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')),
+        keccak256(toHex(data.domain.name!)),
+        keccak256(toHex(data.domain.version!)),
+        BigInt(data.domain.chainId),
+        data.domain.verifyingContract!
+      ]
+    )
+  );
+
+  // Compute struct hash using abi.encode (not encodePacked)
+  const structHash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters('bytes32, address, address, uint256, uint256, uint256, bytes32'),
+      [
+        TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
+        getAddress(from),
+        getAddress(to),
+        BigInt(value),
+        BigInt(validAfter),
+        BigInt(validBefore),
+        nonce as Hex
+      ]
+    )
+  );
+
+  // Final EIP-712 hash
+  const eip712Hash = keccak256(
+    encodePacked(
+      ['bytes1', 'bytes1', 'bytes32', 'bytes32'],
+      ['0x19' as Hex, '0x01' as Hex, domainSeparator, structHash]
+    )
+  );
+
+  console.log('[SIGN] EIP-712 Hash:', eip712Hash);
+
+  // Sign the raw EIP-712 hash with EIP-191 (for EIP-1271 compatibility)
   if (isSignerWallet(walletClient)) {
-    const signature = await walletClient.signTypedData(data);
+    const signature = await walletClient.signMessage({
+      message: { raw: eip712Hash }
+    });
+    console.log('[SIGN] Signature (EIP-191):', signature);
     return {
       signature,
     };
-  } else if (isAccount(walletClient) && walletClient.signTypedData) {
-    const signature = await walletClient.signTypedData(data);
+  } else if (isAccount(walletClient) && walletClient.signMessage) {
+    const signature = await walletClient.signMessage({
+      message: { raw: eip712Hash }
+    });
+    console.log('[SIGN] Signature (EIP-191):', signature);
     return {
       signature,
     };
   } else {
-    throw new Error("Invalid wallet client provided does not support signTypedData");
+    throw new Error("Invalid wallet client provided does not support signMessage");
   }
 }
 
