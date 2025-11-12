@@ -111,7 +111,13 @@ export async function createPayment<transport extends Transport, chain extends C
   x402Version: number,
   paymentRequirements: PaymentRequirements,
 ): Promise<PaymentPayload> {
-  const from = isSignerWallet(client) ? client.account!.address : client.address;
+  // Check if client has smart account address override (for EIP-4337 smart accounts)
+  const smartAccountAddress = (client as any).smartAccountAddress;
+  const from = smartAccountAddress || (isSignerWallet(client) ? client.account!.address : client.address);
+  
+  console.log('[x402 client.ts] Payment from address:', from);
+  console.log('[x402 client.ts] Smart account override:', smartAccountAddress ? 'yes' : 'no');
+  
   const unsignedPaymentHeader = preparePaymentHeader(from, x402Version, paymentRequirements);
   return signPaymentHeader(client, paymentRequirements, unsignedPaymentHeader);
 }
