@@ -72,7 +72,7 @@ app.use(
       // Protected endpoint configuration
       'GET /premium': {
         price: '$0.01', // USDC amount in dollars
-        network: 'polygon-amoy',
+        network: 'ethereum-sepolia',
         maxTimeoutSeconds: 300, // Increased from default 60 to allow more processing time
         config: {
           description: 'Get premium content',
