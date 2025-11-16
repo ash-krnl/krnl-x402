@@ -85,6 +85,22 @@ app.use(
           },
         },
       },
+      'POST /onlybrains': {
+        price: '$1.00', // USDC amount in dollars
+        network: 'ethereum-sepolia',
+        maxTimeoutSeconds: 300,
+        config: {
+          description: 'Access OnlyBrains premium AI training content',
+          outputSchema: {
+            type: 'object',
+            properties: {
+              subscription: { type: 'object' },
+              content: { type: 'object' },
+              message: { type: 'string' },
+            },
+          },
+        },
+      },
     },
     {
       url: FACILITATOR_URL as `${string}://${string}`, // Use your KRNL facilitator
@@ -117,6 +133,37 @@ app.get('/premium', (req, res) => {
 });
 
 /**
+ * Protected resource: OnlyBrains Premium AI Training Content
+ * Payment handled automatically by x402-express middleware (4.00 USDC)
+ */
+app.post('/onlybrains', (req, res) => {
+  // Middleware already verified payment - return the "good" content
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
+  
+  res.json({
+    subscription: {
+      status: 'active',
+      tier: 'premium',
+      expiresAt: expiresAt.toISOString(),
+      accessGranted: new Date().toISOString(),
+    },
+    content: {
+      title: 'OnlyBrains Premium Training Dataset',
+      description: 'High-quality curated AI training content',
+      datasets: [
+        'Advanced model fine-tuning techniques',
+        'Optimization strategies for transformer architectures',
+        'Cutting-edge research papers and implementations',
+        'Expert-annotated training data',
+      ],
+      note: 'You now have access to premium AI training resources for 30 days',
+    },
+    message: '✅ Payment verified! OnlyBrains premium subscription activated. Settlement via KRNL workflow.',
+  });
+});
+
+/**
  * Start server
  */
 app.listen(PORT, HOST, () => {
@@ -126,8 +173,9 @@ app.listen(PORT, HOST, () => {
   console.log(`📍 Facilitator: ${FACILITATOR_URL}`);
   console.log(`📍 Recipient: ${RECIPIENT_ADDRESS}`);
   console.log(`\nEndpoints:`);
-  console.log(`   GET  /health   - Health check (free)`);
-  console.log(`   GET  /premium  - Premium content (0.01 USDC)`);
+  console.log(`   GET  /health      - Health check (free)`);
+  console.log(`   GET  /premium     - Premium content (0.01 USDC)`);
+  console.log(`   POST /onlybrains  - OnlyBrains premium AI training (4.00 USDC)`);
   console.log(`\nℹ️  Payment handling: x402-express middleware`);
   console.log(`ℹ️  Settlement: KRNL facilitator (atomic workflows)\n`);
 });

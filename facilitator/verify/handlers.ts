@@ -78,7 +78,9 @@ export async function postVerifyPayment(
       return {
         isValid: false,
         invalidReason: 'unexpected_verify_error',
-        payer: payload.authorization?.from,
+        payer: 'authorization' in paymentPayload.payload
+          ? (paymentPayload.payload as any).authorization?.from
+          : undefined,
       } as VerifyResponse;
     }
   } catch (error) {

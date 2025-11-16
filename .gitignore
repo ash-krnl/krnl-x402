@@ -31,23 +31,8 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
-.env.example
-ARCHITECTURE.md
-ARCHITECTURE_DIAGRAM.md
-DOCUMENTATION_INDEX.md
-IMPLEMENTATION_SUMMARY.md
-INTEGRATION_GUIDE.md
-INTEGRATION_SUMMARY.md
-# x402/
-X402_SDK_QUICK_REFERENCE.md
-X402_SDK_USAGE_GUIDE.md
 
-
-#contracts
-contracts/
-KRNL_WORKFLOW_PATTERN.md
-X402_SETTLEMENT_DEEP_DIVE.md
-/test
-/sample
-/sdk-react-7702
-*.md
+# Temporary files and build artifacts
+dist/
+*.tmp
+*.temp
