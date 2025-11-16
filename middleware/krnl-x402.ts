@@ -149,10 +149,37 @@ export async function krnlX402Middleware(
   console.log(`   - Payment nonce: ${paymentNonce}`);
   console.log(`   - Background polling initiated`);
 
-  // Return verify response immediately (non-blocking)
-  // Settlement will complete asynchronously via KRNL workflow
+  const maxWaitMs = 30000;
+  const pollIntervalMs = 2000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const status = await krnlClient.getWorkflowStatus(result.workflowId);
+    const steps = status.steps || status.result?.steps;
+
+    if (Array.isArray(steps)) {
+      const verifyStep = steps.find((s: any) => s && s.name === 'x402-verify-payment');
+
+      if (verifyStep && verifyStep.output && verifyStep.output.response) {
+        const body = verifyStep.output.response.body || {};
+        const isValid = Boolean(body.isValid);
+        const invalidReason = body.invalidReason ?? null;
+        const payerFromBody = body.payer;
+
+        return {
+          isValid,
+          invalidReason: invalidReason ?? undefined,
+          payer: payerFromBody || sender,
+        } as VerifyResponse;
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
   return {
-    isValid: true,
+    isValid: false,
+    invalidReason: 'unexpected_verify_error',
     payer: sender,
   } as VerifyResponse;
 }
