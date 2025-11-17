@@ -40,12 +40,21 @@ export async function postSettlePayment(
   if (!paymentNonce) {
     console.error('❌ No payment nonce found in payload');
     reply.code(400);
-    return {
+    const result: SettleResponse & {
+      error: string | null;
+      txHash: string | null;
+      networkId: string | null;
+    } = {
       success: false,
       errorReason: 'unexpected_settle_error',
       transaction: '',
       network: paymentRequirements.network,
-    } as SettleResponse;
+      // Aliases for consumer convenience
+      error: 'unexpected_settle_error',
+      txHash: null,
+      networkId: paymentRequirements.network ?? null,
+    };
+    return result;
   }
 
   // Check if KRNL workflow exists for this payment
@@ -55,12 +64,20 @@ export async function postSettlePayment(
     console.error(`❌ No KRNL workflow found for nonce ${paymentNonce.slice(0, 10)}...`);
     console.error('   Payment must go through /verify endpoint first to create atomic workflow');
     reply.code(404);
-    return {
+    const result: SettleResponse & {
+      error: string | null;
+      txHash: string | null;
+      networkId: string | null;
+    } = {
       success: false,
       errorReason: 'unexpected_settle_error',
       transaction: '',
       network: paymentRequirements.network,
-    } as SettleResponse;
+      error: 'unexpected_settle_error',
+      txHash: null,
+      networkId: paymentRequirements.network ?? null,
+    };
+    return result;
   }
 
   // KRNL workflow exists - check its status
@@ -77,7 +94,11 @@ export async function postSettlePayment(
     console.error('❌ KRNL workflow failed');
     const errorMessage = workflow.workflowStatus?.error || 'Workflow execution failed';
     reply.code(500);
-    return {
+    const result: SettleResponse & {
+      error: string | null;
+      txHash: string | null;
+      networkId: string | null;
+    } = {
       success: false,
       errorReason: 'unexpected_settle_error',
       transaction: '',
@@ -85,7 +106,11 @@ export async function postSettlePayment(
       payer: 'authorization' in paymentPayload.payload 
         ? paymentPayload.payload.authorization.from 
         : undefined,
-    } as SettleResponse;
+      error: errorMessage,
+      txHash: null,
+      networkId: paymentRequirements.network ?? null,
+    };
+    return result;
   }
 
   // Workflow is pending or running - wait for completion
@@ -105,13 +130,20 @@ export async function postSettlePayment(
       const workflowStatus = await krnlClient.pollWorkflowUntilComplete(workflow.workflowId, 30000, 2000);
       
       if (workflowStatus.status === 'completed' && workflowStatus.transactionHash) {
-        const settleResult: SettleResponse = {
+        const settleResult: SettleResponse & {
+          error: string | null;
+          txHash: string | null;
+          networkId: string | null;
+        } = {
           success: true,
           transaction: workflowStatus.transactionHash,
           network: paymentRequirements.network,
           payer: 'authorization' in paymentPayload.payload 
             ? paymentPayload.payload.authorization.from 
             : undefined,
+          error: null,
+          txHash: workflowStatus.transactionHash,
+          networkId: paymentRequirements.network ?? null,
         };
         
         console.log(`✅ KRNL workflow completed with tx: ${workflowStatus.transactionHash}`);
@@ -121,34 +153,58 @@ export async function postSettlePayment(
       // Workflow completed but no transaction hash
       console.error('❌ Workflow completed but no transaction hash returned');
       reply.code(500);
-      return {
+      const result: SettleResponse & {
+        error: string | null;
+        txHash: string | null;
+        networkId: string | null;
+      } = {
         success: false,
         errorReason: 'unexpected_settle_error',
         transaction: '',
         network: paymentRequirements.network,
-      } as SettleResponse;
+        error: 'unexpected_settle_error',
+        txHash: null,
+        networkId: paymentRequirements.network ?? null,
+      };
+      return result;
       
     } catch (error) {
       console.error('❌ Error polling KRNL workflow:', error);
       reply.code(500);
-      return {
+      const result: SettleResponse & {
+        error: string | null;
+        txHash: string | null;
+        networkId: string | null;
+      } = {
         success: false,
         errorReason: 'unexpected_settle_error',
         transaction: '',
         network: paymentRequirements.network,
-      } as SettleResponse;
+        error: 'unexpected_settle_error',
+        txHash: null,
+        networkId: paymentRequirements.network ?? null,
+      };
+      return result;
     }
   }
 
   // Unknown state
   console.error(`❌ Workflow in unknown state: ${workflow.status}`);
   reply.code(500);
-  return {
+  const result: SettleResponse & {
+    error: string | null;
+    txHash: string | null;
+    networkId: string | null;
+  } = {
     success: false,
     errorReason: 'unexpected_settle_error',
     transaction: '',
     network: paymentRequirements.network,
-  } as SettleResponse;
+    error: 'unexpected_settle_error',
+    txHash: null,
+    networkId: paymentRequirements.network ?? null,
+  };
+  return result;
 }
 
 /**

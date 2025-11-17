@@ -18,7 +18,6 @@ import { OnlyBrainsResponse } from '../types/index.js';
 
 // Resolve wrapFetchWithPayment across ESM/CJS interop and CommonJS compilation
 const x402Exports = X402FetchModule as any;
-console.log('🟣 [OnlyBrainsService] x402-fetch exports keys:', Object.keys(x402Exports));
 const wrapFetchWithPayment =
   x402Exports.wrapFetchWithPayment ||
   (x402Exports.default && x402Exports.default.wrapFetchWithPayment);
@@ -282,43 +281,24 @@ export class OnlyBrainsService {
     private recipientAddress: Address,
     private krnlNodeUrl: string
   ) {
-    console.log('🟣 [OnlyBrainsService] Constructor called with:');
-    console.log('  privateKey:', privateKey ? `${privateKey.slice(0, 10)}...` : 'undefined');
-    console.log('  rpcUrl:', rpcUrl);
-    console.log('  factoryAddress:', factoryAddress);
-    console.log('  appSecret:', appSecret);
-    console.log('  serverUrl:', serverUrl);
-    console.log('  targetContract:', targetContract);
-    console.log('  targetContractOwner:', targetContractOwner);
-    console.log('  usdcContract:', usdcContract);
-    console.log('  recipientAddress:', recipientAddress);
-    console.log('  krnlNodeUrl:', krnlNodeUrl);
-
+    
     try {
       // Create EOA from private key
-      console.log('🟣 [OnlyBrainsService] Creating EOA from private key...');
       this.eoaAccount = privateKeyToAccount(this.privateKey);
-      console.log('🟣 [OnlyBrainsService] EOA created:', this.eoaAccount.address);
 
       // Create wallet client with EOA
-      console.log('🟣 [OnlyBrainsService] Creating wallet client...');
       this.walletClient = createWalletClient({
         account: this.eoaAccount,
         chain: sepolia,
         transport: http(this.rpcUrl)
       });
-      console.log('🟣 [OnlyBrainsService] Wallet client created');
 
       // Create public client
-      console.log('🟣 [OnlyBrainsService] Creating public client...');
       this.publicClient = createPublicClient({
         chain: sepolia,
         transport: http(this.rpcUrl)
       });
-      console.log('🟣 [OnlyBrainsService] Public client created');
-      console.log('🟣 [OnlyBrainsService] Constructor completed successfully');
     } catch (error) {
-      console.error('🔴 [OnlyBrainsService] Constructor error:', error);
       throw error;
     }
   }
@@ -327,27 +307,10 @@ export class OnlyBrainsService {
    * Get smart account address using factory + EOA + app secret
    */
   async getSmartAccountAddress(): Promise<Address> {
-    console.log('🟣 [OnlyBrainsService] getSmartAccountAddress called');
-
     const saltInput = `${this.eoaAccount.address}${this.appSecret}`;
-    console.log('🟣 [OnlyBrainsService] saltInput:', saltInput);
-
     const saltHex = toHex(saltInput);
-    console.log('🟣 [OnlyBrainsService] saltHex:', saltHex);
 
     const saltValue = keccak256(saltHex);
-    console.log('🟣 [OnlyBrainsService] saltValue:', saltValue);
-
-    console.log('🟣 [OnlyBrainsService] factoryAddress:', this.factoryAddress);
-    console.log('🟣 [OnlyBrainsService] ABI type:', typeof AccountFactory4337ABI);
-    console.log(
-      '🟣 [OnlyBrainsService] ABI isArray/length:',
-      Array.isArray(AccountFactory4337ABI),
-      Array.isArray(AccountFactory4337ABI) ? AccountFactory4337ABI.length : 'n/a'
-    );
-    if (Array.isArray(AccountFactory4337ABI)) {
-      console.log('🟣 [OnlyBrainsService] ABI[0]:', AccountFactory4337ABI[0]);
-    }
 
     try {
       const accountAddress = await this.publicClient.readContract({
@@ -357,10 +320,8 @@ export class OnlyBrainsService {
         args: [this.eoaAccount.address, saltValue]
       });
 
-      console.log('🟣 [OnlyBrainsService] smart account address from factory:', accountAddress);
       return accountAddress as Address;
     } catch (error) {
-      console.error('🔴 [OnlyBrainsService] readContract error in getSmartAccountAddress:', error);
       throw error;
     }
   }
@@ -510,11 +471,8 @@ export class OnlyBrainsService {
    * Follows exact pattern from client-eoa-eip4337.ts
    */
   async purchaseOnlyBrains(): Promise<OnlyBrainsResponse> {
-    console.log('🔷 [OnlyBrains] Starting purchase flow...');
-    
     // Initialize smart account if needed
     if (!this.smartAccountAddress) {
-      console.log('🔷 [OnlyBrains] Initializing smart account...');
       await this.initializeSmartAccount();
     }
 
@@ -524,33 +482,21 @@ export class OnlyBrainsService {
     }
 
     const smartAccountAddr = this.smartAccountAddress;
-    console.log('🔷 [OnlyBrains] Smart account address:', smartAccountAddr);
 
     // 1. Get KRNL node configuration
-    console.log('🔷 [OnlyBrains] Getting KRNL node config...');
     const nodeConfig = await this.getKRNLNodeConfig();
-    console.log('🔷 [OnlyBrains] Node config:', nodeConfig);
 
     // 2. Create transaction intent parameters
-    console.log('🔷 [OnlyBrains] Getting contract nonce...');
     const nonce = await this.getContractNonce(this.targetContract, smartAccountAddr);
-    console.log('🔷 [OnlyBrains] Nonce:', nonce);
-    
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
-    console.log('🔷 [OnlyBrains] Deadline:', deadline);
-    
-    console.log('🔷 [OnlyBrains] Getting function selector...');
     const functionSelector = this.getFunctionSelector();
-    console.log('🔷 [OnlyBrains] Function selector:', functionSelector);
 
-    console.log('🔷 [OnlyBrains] Creating intent ID...');
     const intentId = keccak256(
       encodePacked(
         ['address', 'uint256', 'uint256'],
         [smartAccountAddr, nonce, deadline]
       )
     ) as Hex;
-    console.log('🔷 [OnlyBrains] Intent ID:', intentId);
 
     const intentParams: TransactionIntentParams = {
       target: this.targetContract,
@@ -562,15 +508,11 @@ export class OnlyBrainsService {
       nonce,
       deadline
     };
-    console.log('🔷 [OnlyBrains] Intent params:', intentParams);
 
     // 3. Sign transaction intent with EOA
-    console.log('🔷 [OnlyBrains] Signing transaction intent...');
     const intentSignature = await this.signTransactionIntent(intentParams);
-    console.log('🔷 [OnlyBrains] Intent signature:', intentSignature);
 
     // 4. Get USDC domain separator
-    console.log('🔷 [OnlyBrains] Getting USDC domain separator...');
     const USDC_ABI = [{
       name: 'DOMAIN_SEPARATOR',
       type: 'function',
@@ -584,10 +526,30 @@ export class OnlyBrainsService {
       abi: USDC_ABI,
       functionName: 'DOMAIN_SEPARATOR'
     }) as Hex;
-    console.log('🔷 [OnlyBrains] USDC domain separator:', usdcDomainSeparator);
 
-    // 5. Create USDC authorization (using smart account as 'from')
-    console.log('🔷 [OnlyBrains] Creating USDC authorization...');
+    // 5. Check smart account USDC balance before proceeding
+    const USDC_BALANCE_ABI = [{
+      name: 'balanceOf',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [{ name: 'account', type: 'address' }],
+      outputs: [{ name: 'balance', type: 'uint256' }],
+    }] as const;
+
+    const balance = await this.publicClient.readContract({
+      address: this.usdcContract,
+      abi: USDC_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [smartAccountAddr]
+    }) as bigint;
+
+    const requiredAmount = BigInt(1000000); // 1.00 USDC (6 decimals)
+    
+    if (balance < requiredAmount) {
+      throw new Error(`Insufficient USDC balance: ${balance} < ${requiredAmount} (need 1.00 USDC)`);
+    }
+
+    // 6. Create USDC authorization (using smart account as 'from')
     const usdcAuthorization = {
       from: smartAccountAddr,
       to: this.recipientAddress,
@@ -596,32 +558,24 @@ export class OnlyBrainsService {
       validBefore: BigInt(Math.floor(Date.now() / 1000) + 3600),
       nonce: ('0x' + Math.random().toString(16).slice(2).padStart(64, '0')) as Hex,
     };
-    console.log('🔷 [OnlyBrains] USDC authorization:', usdcAuthorization);
 
-    // 6. Sign USDC authorization with EOA
-    console.log('🔷 [OnlyBrains] Signing USDC authorization...');
+    // 7. Sign USDC authorization with EOA
     const usdcSignature = await this.signUSDCAuthorization(usdcAuthorization, usdcDomainSeparator);
-    console.log('🔷 [OnlyBrains] USDC signature:', usdcSignature);
 
-    // 7. Attach KRNL parameters and smart account address to wallet client
-    console.log('🔷 [OnlyBrains] Attaching parameters to wallet client...');
+    // 8. Attach KRNL parameters and smart account address to wallet client
     (this.walletClient as any).intentSignature = intentSignature;
     (this.walletClient as any).transactionIntent = intentParams;
     (this.walletClient as any).usdcSignature = usdcSignature;
     (this.walletClient as any).usdcAuthorization = usdcAuthorization;
     (this.walletClient as any).smartAccountAddress = smartAccountAddr;
-    console.log('🔷 [OnlyBrains] Parameters attached');
 
-    // 8. Use wrapFetchWithPayment - this handles the 402 flow automatically
-    console.log('🔷 [OnlyBrains] Creating wrapped fetch...');
+    // 9. Use wrapFetchWithPayment - this handles the 402 flow automatically
     const wrappedFetch = wrapFetchWithPayment(
       _fetch as any,
       this.walletClient,
       BigInt(1.1 * 10 ** 6) // 1.1 USDC max
     );
-    console.log('🔷 [OnlyBrains] Wrapped fetch created');
 
-    console.log('🔷 [OnlyBrains] Making payment request to:', `${this.serverUrl}/onlybrains`);
     const response = await wrappedFetch(
       `${this.serverUrl}/onlybrains`,
       {
@@ -631,7 +585,6 @@ export class OnlyBrainsService {
         }
       }
     );
-    console.log('🔷 [OnlyBrains] Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();

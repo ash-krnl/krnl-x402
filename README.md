@@ -1,436 +1,398 @@
-# KRNL-Enhanced X402 Facilitator Server
+# KRNL-Enhanced X402 Facilitator with EigenAI Integration
 
-High-performance x402 payment facilitator with **atomic verify+settle** powered by KRNL Protocol.
+Next-generation x402 payment facilitator featuring **atomic verify+settle** workflows powered by KRNL Protocol and intelligent AI agent interactions through EigenAI.
+
+## Contents
+
+- [What Makes This Different?](#what-makes-this-different)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Facilitator API](#facilitator-api-overview)
+- [EigenAI Agent](#eigenai-agent-usage)
+- [How It Works](#how-it-works)
+- [Client Integration](#client-integration)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [Performance](#performance)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+- [Contributing](#contributing)
+- [Links](#links)
 
 ## 🎯 What Makes This Different?
 
-**Traditional x402 Flow:**
-1. Client sends payment → Facilitator **verifies** signature
-2. Server delivers resource
-3. Facilitator **settles** on-chain (separate transaction)
-4. Two separate operations, non-atomic
+### KRNL Protocol Enhancement
 
-**KRNL-Enhanced Flow:**
-1. Client sends payment → Facilitator **starts KRNL workflow** (returns immediately)
-2. Server delivers resource (no waiting)
-3. KRNL workflow **verifies + settles atomically** in background
-4. Facilitator **awaits workflow result** when `/settle` is called
-5. Single atomic on-chain transaction ⚡
+Unlike traditional x402 facilitators that handle verification and settlement separately, this system performs **both operations atomically** through KRNL blockchain workflows:
 
-**Benefits:**
-- ✅ **Non-blocking** - Verify returns immediately, no latency
-- ✅ **Atomic execution** - Verification and settlement are one indivisible operation
-- ✅ **Trustless** - Cryptographically verified by KRNL attestors
-- ✅ **Cheaper** - Optimized gas costs via EIP-4337 bundling
+**Traditional Flow:** `Verify → Serve Resource → Settle` (3 separate steps)
+**KRNL-Enhanced Flow:** `Start Atomic Workflow → Serve Resource → Get Result` (1 atomic operation)
 
-## Features
+**KRNL Protocol Benefits:**
+- 🔐 **Atomic execution** - Settlement guaranteed with verification
+- 🛡️ **Trustless** - Each step cryptographically signed by an attestor
+- 💰 **Gas optimized** - EIP-4337 bundled transactions
+- 🔗 **Verifiable** - Complete audit trail with on-chain receipts
 
-- ⚡ **Ultra-fast**: Built on Fastify, non-blocking async architecture
-- 🔐 **Atomic Settlement**: KRNL-powered atomic verify+settle via workflows
-- 🔄 **Background Polling**: Mimics KRNL React SDK's internal polling mechanism
-- 🌐 **Multi-chain**: Supports EVM networks including Ethereum Sepolia, Base Sepolia, Optimism Sepolia, Arbitrum Sepolia
-- 🔒 **Secure**: Validates payment payloads and requirements
-- 🛡️ **KRNL-Only**: No fallback logic - pure KRNL workflow execution
-- 📊 **Production-ready**: Redis-ready workflow tracking, health checks
+### EIP-4337 Smart Account Innovation
 
-## Quick Start
+This implementation leverages **EIP-4337 (Account Abstraction)** to solve critical limitations of traditional facilitators:
+
+#### Flexible Gas Payment
+
+**Traditional Facilitator Problem:**
+- Facilitator must pay gas for settlement transactions
+- Requires facilitator to maintain ETH balance on all chains
+- Creates trust assumption: facilitator has funds and won't manipulate settlement
+- Communication between server/facilitator could be tampered with
+- Single point of failure if facilitator runs out of gas
+
+**EIP-4337 Solution:**
+- ✅ **Agent pays own gas** - Smart accounts can hold ETH and self-sponsor
+- ✅ **Server-side gas sponsorship** - Paymasters enable gasless UX without facilitator involvement
+- ✅ **Trustless execution** - No need to trust facilitator has gas or won't manipulate
+- ✅ **Flexible payment** - Gas can be paid in ERC-20 tokens (e.g., pay gas in USDC)
+- ✅ **Decoupled architecture** - Settlement happens independently of facilitator balance
+
+#### Native Multi-chain Support
+
+**Traditional Facilitator Limitation:**
+- Each chain requires separate EOA private key management
+- Different nonce tracking per chain
+- Complex cross-chain state synchronization
+
+**EIP-4337 Multi-chain Benefits:**
+- ✅ **Same smart account across all EVM chains** - Deterministic addresses
+- ✅ **Unified interface** - One account abstraction standard works everywhere
+- ✅ **Chain-agnostic workflows** - KRNL workflows deploy identically on any EVM chain
+- ✅ **Out-of-the-box support** - Ethereum, Base, Optimism, Arbitrum, Polygon (any EVM chain)
+- ✅ **No per-chain configuration** - Single account factory works universally
+
+**Supported Networks:**
+```
+Ethereum Sepolia   │  Base Sepolia   │  Optimism Sepolia  │  Arbitrum Sepolia
+───────────────────┼─────────────────┼────────────────────┼──────────────────
+Same Account Addr  │  Same Account   │  Same Account      │  Same Account
+Same Workflow      │  Same Workflow  │  Same Workflow     │  Same Workflow
+```
+
+## ✨ Features
+
+### KRNL Facilitator
+- **Atomic Settlement**: KRNL workflow-powered verify+settle operations
+- **Multi-chain Support**: Ethereum, Base, Optimism, Arbitrum (Sepolia networks)
+- **EIP-4337 Integration**: Smart account wallets and gasless transactions
+- **Verifiable Workflows**: Each step cryptographically signed and traceable
+
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+**For Facilitator:**
+- **Node.js** v18+
+- **ngrok** for local development (KRNL needs to reach your facilitator)
+- **Test funds**: Base Sepolia ETH + USDC
+- **API Keys**: Pimlico bundler/paymaster for EIP-4337
+
+**For EigenAI Agent:**
+- **EigenAI API access** (sign up at eigencloud.xyz)
+- **Smart account setup** (uses KRNL EIP-4337 account factory)
+- **Wallet with private key** for signing intents
 
 ### Installation
 
 ```bash
+git clone <your-repo>
+cd krnl-x402
 npm install
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
-### Environment Variables
-
-Create a `.env` file:
+### Essential Configuration
 
 ```bash
-# Server Configuration
-PORT=3000
-HOST=0.0.0.0
-
-# RPC endpoint for your target network (e.g., Sepolia / Base Sepolia)
-RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
-
-# KRNL Node configuration (KRNL-only)
+# .env
+RPC_URL=https://sepolia.base.org
 KRNL_NODE_URL=https://node.krnl.xyz
-
-#EIP-4337 infrastructure
-BUNDLER_URL=https://api.pimlico.io/v2/sepolia/rpc?apikey=YOUR_KEY
-PAYMASTER_URL=https://api.pimlico.io/v2/sepolia/rpc?apikey=YOUR_KEY
-
-# KRNL workflow configuration
-ATTESTOR_IMAGE=ghcr.io/krnl-labs/attestor:latest
-FACILITATOR_URL=http://localhost:3000
-
-# X402Target contract for atomic settlement (deployed via contracts/)
-TARGET_CONTRACT_ADDRESS=0xYourDeployedTargetContract
-
-# Optional: Redis for distributed workflow tracking (production)
-# REDIS_URL=redis://localhost:6379
-
-# Note: Solana is currently disabled in this project; no SOLANA_* variables are required.
+BUNDLER_URL=https://api.pimlico.io/v2/base-sepolia/rpc?apikey=YOUR_KEY
+PAYMASTER_URL=https://api.pimlico.io/v2/base-sepolia/rpc?apikey=YOUR_KEY
+FACILITATOR_URL=https://your-ngrok-url.ngrok-free.app
 ```
 
-### Development
+See **[Deployment Guide](./DEPLOYMENT_GUIDE.md)** for complete configuration options.
+
+### Development Setup
+
+1. **Start ngrok** (for KRNL to reach your facilitator):
+   ```bash
+   ngrok http 3000
+   # Copy the ngrok URL and update FACILITATOR_URL in .env
+   ```
+
+2. **Start the facilitator**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Test the setup**:
+   ```bash
+   curl https://YOUR_NGROK_URL/facilitator/supported
+   ```
+
+### Production Deployment
+
+For production deployment options including Railway, Fly.io, AWS, and others, see the **[Deployment Guide](./DEPLOYMENT_GUIDE.md)**.
+
+## 🔧 Facilitator API Overview
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/facilitator/verify` | POST | Start atomic KRNL workflow, return immediately |
+| `/facilitator/settle` | POST | Get workflow result (waits up to 30s) |
+| `/facilitator/supported` | GET | List supported networks |
+| `/health` | GET | Health check |
+
+**Atomic Workflow Flow:**
+1. `POST /verify` → Starts KRNL workflow → `{ isValid: true }` (< 100ms)
+2. Background: KRNL executes verifiable workflow steps (5-30s)
+   - `x402-verify-payment` - Validates EIP-3009 signature
+   - `x402-encode-payment-params` - Encodes USDC authorization
+   - `prepare-authdata` - Prepares attestor signatures
+   - `target-calldata` - Generates settlement calldata
+   - `sca-calldata` - Prepares EIP-4337 UserOperation
+3. `POST /settle` → Returns cached result → `{ transaction: "0x..." }`
+
+## 🤖 EigenAI Agent Usage
+
+See the [EigenAI Overview](https://docs.eigencloud.xyz/products/eigenai/concepts/eigenai-overview) for core EigenAI concepts and terminology.
+
+### What is EigenAI?
+
+EigenAI is a verifiable AI inference network that lets you build applications on top of LLMs **without wondering if the same call will behave differently on each run**, or if prompts/models/responses are being modified in-flight. EigenAI offers:
+
+In this repository, EigenAI is the AI backend for the agent that understands monitors KRNL workflows, and decides when to call the when to access the content/data from the premium content server.
+
+### Starting the Agent
 
 ```bash
+cd eigenai-agent
+npm install
+cp .env.example .env
+# Configure EigenAI and wallet settings in .env
 npm run dev
 ```
 
-### Production
 
-```bash
-npm run build
-npm run serve
-```
+## 🏗️ How It Works
 
-## API Endpoints
+**Traditional x402:** `Verify Signature → Settle Later`
+**KRNL x402:** `Start Atomic Workflow → Return Immediately → Background Settlement`
 
-### POST /facilitator/verify
+### Sequence Diagram
 
-KRNL-only. Starts an atomic verify+settle workflow and returns immediately. Background polling tracks workflow progress.
+![Sequence Diagram](./diagram.png)
 
-**Request Body:**
-```json
-{
-  "paymentPayload": { ... },
-  "paymentRequirements": { ... }
-}
-```
+**KRNL Advantages:**
+- **Non-blocking**: Verify returns immediately while workflow executes
+- **Atomic**: All steps execute or none do - no partial states
+- **Verifiable**: Each step is cryptographically signed by attestors
+- **Trustless**: No need to trust the facilitator - verify on-chain
+- **Reliable**: Guaranteed settlement with cryptographic proofs
 
-**Response (returns immediately):**
-```json
-{
-  "isValid": true,
-  "payer": "0x..."
-}
-```
-Note: Settlement happens asynchronously. The `/settle` endpoint can wait for and return the final result when needed.
+**Gas Payment Model (EIP-4337):**
 
-### GET /facilitator/verify
+The EIP-4337 UserOperation submitted in the final step can be sponsored in multiple ways:
 
-Get API documentation for the verify endpoint.
+1. **Agent Self-Sponsorship**
+   ```
+   Smart Account holds ETH → Pays own gas → No external dependencies
+   ```
 
-### POST /facilitator/settle
+2. **Paymaster Sponsorship**
+   ```
+   Paymaster contract → Subsidizes gas → Gasless UX for agent
+   ```
 
-Settle x402 payments on-chain.
+3. **ERC-20 Gas Payment**
+   ```
+   Smart Account pays gas in USDC/USDT → No ETH needed
+   ```
 
-Behavior:
-1. If KRNL workflow completed: returns cached result immediately
-2. If KRNL workflow running: waits up to 30s for completion
-3. If KRNL workflow failed or timed out: returns error
+**Key Difference from Traditional Facilitators:**
+- ❌ Traditional: Facilitator pays gas → Must trust facilitator has funds
+- ✅ KRNL + EIP-4337: Client/agent/server pays gas → No facilitator dependency
+- ✅ Trustless: Settlement happens even if facilitator goes offline
+- ✅ Secure: No risk of facilitator manipulating settlement to save gas
 
-**Request Body:**
-```json
-{
-  "paymentPayload": { ... },
-  "paymentRequirements": { ... }
-}
-```
+## 💻 Client Integration
 
-**Response:**
-```json
-{
-  "success": true,
-  "transaction": "0x...",
-  "network": "base-sepolia",
-  "payer": "0x..."
-}
-```
+### Payment Payload Structure
 
-### GET /facilitator/settle
-
-Get API documentation for the settle endpoint.
-
-### GET /facilitator/supported
-
-Get supported payment kinds and networks.
-
-**Response:**
-```json
-{
-  "kinds": [
-    {
-      "x402Version": 1,
-      "scheme": "exact",
-      "network": "base-sepolia"
-    }
-  ]
-}
-```
-
-### GET /health
-
-Health check endpoint.
-
-## 🏗️ Architecture
-
-### KRNL Async Workflow Execution
-
-When a `/verify` request comes in:
+Clients must include KRNL intent fields alongside standard EIP-3009 authorization:
 
 ```typescript
-// 1. Middleware intercepts request
-POST /facilitator/verify
-{
-  "paymentPayload": { /* EIP-3009 authorization */ },
-  "paymentRequirements": { /* payment details */ }
+interface ExtendedPaymentPayload {
+  payload: {
+    // Standard EIP-3009 authorization (USDC transferWithAuthorization)
+    authorization: {
+      from: string;        // Smart account address (EIP-4337)
+      to: string;          // Recipient address
+      value: string;       // Amount in USDC (e.g., "1000000" for $1)
+      nonce: string;       // Random bytes32 nonce
+      validAfter: string;  // Unix timestamp (usually "0")
+      validBefore: string; // Unix timestamp (deadline)
+    };
+    signature: string;     // EIP-712 signature of authorization
+
+    // Required KRNL intent fields for atomic workflow
+    intentId: string;          // keccak256(smartAccount, nonce, deadline)
+    intentSignature: string;   // EOA signature of transaction intent
+    intentDeadline: string;    // Intent expiration (unix timestamp)
+    intentDelegate: string;    // KRNL delegate/owner address
+    intentTarget: string;      // Target contract for settlement
+  };
 }
-
-// 2. Builds KRNL workflow DSL JSON
-{
-  "workflow": {
-    "name": "x402-payment-settlement",
-    "steps": [
-      { "name": "x402-verify-payment", "image": "ghcr.io/krnl-labs/executor-http" },
-      { "name": "x402-encode-payment-params", "image": "ghcr.io/krnl-labs/executor-encoder-evm" }
-    ]
-  },
-  "chain_id": <derived from network>,
-  "sender": "{{ENV.SENDER_ADDRESS}}",
-  "delegate": "{{TRANSACTION_INTENT_DELEGATE}}"
-}
-
-// 3. Starts workflow via JSON-RPC
-POST https://node.krnl.xyz
-{
-  "jsonrpc": "2.0",
-  "method": "krnl_executeWorkflow",
-  "params": [workflowDSL]
-}
-
-// 4. KRNL node returns workflow ID IMMEDIATELY
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "workflowId": "wf_abc123...",
-    "status": "pending"
-  }
-}
-
-// 5. Facilitator tracks workflow and returns to SDK
-// - Stores: paymentNonce → workflowId mapping
-// - Starts background polling (every 2s)
-// - Returns: { "isValid": true, "payer": "0x..." }
-
-// 6. Background thread polls workflow status
-POST https://node.krnl.xyz
-{
-  "jsonrpc": "2.0",
-  "method": "krnl_getWorkflowStatus",
-  "params": ["wf_abc123..."]
-}
-
-// 7. When workflow completes (5-30s later)
-{
-  "status": "completed",
-  "transactionHash": "0x...",
-  "result": { /* verification + settlement data */ }
-}
-
-// 8. When /settle is called:
-// - If workflow completed: return cached tx hash
-// - If still running: wait up to 30s
-// - If failed: return error
 ```
 
-### 
+### Integration Steps
 
-## How It Works: Async KRNL Flow
+1. **Generate Transaction Intent** (for KRNL workflow)
+   ```typescript
+   const intentId = keccak256(encodePacked(
+     ['address', 'uint256', 'uint256'],
+     [smartAccountAddr, nonce, deadline]
+   ));
+   const intentSignature = await eoaWallet.signTypedData({
+     domain: { ... },
+     types: { TransactionIntent: [...] },
+     primaryType: 'TransactionIntent',
+     message: { target, value, id, ... }
+   });
+   ```
 
-### Standard x402 Flow (Fallback)
-```
-Client → Server → POST /verify → Check signature ✓ → Return { isValid: true }
-                                                      ↓
-Server serves resource to client
-                                                      ↓
-Client uses resource
-                                                      ↓
-Server → POST /settle → Submit on-chain tx → Return { success, transactionHash }
-```
+2. **Create USDC Authorization** (EIP-3009)
+   ```typescript
+   const authorization = {
+     from: smartAccountAddr,  // Smart account holds USDC
+     to: recipientAddress,
+     value: "1000000",         // 1.00 USDC
+     nonce: randomBytes32(),
+     validAfter: "0",
+     validBefore: Math.floor(Date.now() / 1000) + 3600
+   };
+   const signature = await eoaWallet.signTypedData({
+     domain: usdcDomain,
+     types: { TransferWithAuthorization: [...] },
+     message: authorization
+   });
+   ```
 
-### KRNL-Enhanced Atomic Flow (This Project)
-```
-Client → Server → POST /verify → Start KRNL workflow ⚡
-                                  ├─ Returns { isValid: true } immediately
-                                  └─ Background: polls workflow status every 2s
-                                                      ↓
-Server serves resource to client
-                                                      ↓
-Client uses resource
-                                                      ↓
-Server → POST /settle → Check workflow status:
-                        ├─ Completed? Return cached tx hash ✓
-                        ├─ Running? Wait up to 30s for completion
-                        └─ Failed/timeout? Fall back to standard settle
-```
+3. **Submit to Facilitator**
+   ```typescript
+   // Start atomic workflow
+   const verifyRes = await fetch('/facilitator/verify', {
+     method: 'POST',
+     body: JSON.stringify({
+       paymentPayload: { ...authorization, signature, ...intentFields },
+       paymentRequirements: { asset: usdcAddress, ... }
+     })
+   });
+   
+   // Poll for result
+   const settleRes = await fetch('/facilitator/settle', {
+     method: 'POST',
+     body: JSON.stringify({ nonce: authorization.nonce })
+   });
+   ```
 
-### Key Differences
+### Agent Demo
 
-| Aspect | Standard x402 | KRNL Atomic |
-|--------|---------------|-------------|
-| **Verify endpoint** | Checks signature only | Starts workflow, returns immediately |
-| **Settlement** | Separate `/settle` call | Happens in background during workflow |
-| **Timing** | Settlement after resource delivery | Settlement in parallel with resource use |
-| **Idempotency** | Cache-based | Workflow tracking |
-| **Resilience** | N/A | Falls back to standard if KRNL unavailable |
+The **agent demo** (`/eigenai-agent`) provides a complete reference implementation showing:
+- Smart account setup (EIP-4337)
+- Intent generation and signing
+- USDC authorization with EIP-712
+- OnlyBrains payment flow integration
+- Real-time KRNL workflow tracking
 
-### SDK Integration
+Run `npm run test:client` in the root directory to start the agent demo and run `npm run test:server` in the root directory to run the server tests. For testing purpose use: `https://poc.platform.lat/x402` as `FACILITATOR_URL`.
 
-The x402 SDK calls your facilitator:
-
-```ts
-// x402.useFacilitator() makes these calls
-const { isValid } = await verify(payload, requirements);  // → POST /facilitator/verify
-// ... serve resource ...
-const { transaction } = await settle(payload, requirements);  // → POST /facilitator/settle
-```
-
-Your facilitator uses KRNL-only:
-- `/verify`: Always starts a KRNL workflow and returns `{ isValid: true }` immediately
-- `/settle`: Waits or returns cached result from the KRNL workflow
-
-**Solana**: Disabled in this project for now. Only EVM networks are advertised in `/supported`.
 
 ## 📁 Project Structure
 
 ```
 krnl-x402/
-├── index.ts                      # Main server entry
-├── facilitator/
-│   ├── verify/
-│   │   ├── index.ts             # Verify routes
-│   │   └── handlers.ts          # Verify logic with KRNL middleware
-│   ├── settle/
-│   │   ├── index.ts             # Settle routes  
-│   │   └── handlers.ts          # Settle with workflow status checking
-│   └── supported/
-│       └── index.ts             # Supported networks
-├── middleware/
-│   └── krnl-x402.ts             # KRNL async workflow starter
-├── lib/
-│   ├── krnl-client.ts           # JSON-RPC client + polling logic
-│   ├── workflow-builder.ts      # KRNL DSL JSON builder
-│   └── workflow-store.ts        # Payment nonce → workflow tracking
-├── package.json
-├── README.md
-└── INTEGRATION_SUMMARY.md        # Detailed architecture docs
+├── 📄 Documentation files (README, API_REFERENCE, etc.)
+├── 🚀 index.ts                  # Main server entry
+├── 📁 facilitator/              # x402 endpoints (verify, settle, supported)
+├── 📁 lib/                      # Core libraries (KRNL client, workflow builder)
+├── 📁 middleware/               # KRNL workflow integration
+├── 📁 contracts/                # Smart contracts for settlement
+├── 📁 x402/                     # Modified x402 SDK for KRNL support
+├── 📁 eigenai-agent/            # EigenAI agent for test the e2e flow while acting as a client
+└── 📁 test/                     # Test suites
 ```
 
-## Performance & Scaling
+## 🚀 Performance
 
-### Current (Development)
-- In-memory workflow tracking (`Map`)
-- Single server instance
-- Direct polling to KRNL node
+- **Verify Response**: < 100ms (non-blocking)
+- **Settlement Time**: 5-30 seconds (background)
+- **Scaling**: Redis-ready for horizontal scaling
+- **Throughput**: Handles concurrent payments efficiently
 
-### Production Recommendations
-1. **Replace Map with Redis**:
-   ```typescript
-   // lib/workflow-store.ts
-   await redis.setex(`workflow:${nonce}`, 3600, JSON.stringify(tracking));
-   ```
+## 🛠️ Troubleshooting
 
-2. **Horizontal scaling**:
-   - Redis allows multiple facilitator instances
-   - Each instance can poll independently
-   - Shared workflow state
+### Common Issues
 
-3. **Monitoring**:
-   - Track workflow completion rates
-   - Monitor polling performance
-   - Alert on high fallback rates
+**502 Bad Gateway in workflow logs**
+- KRNL executor can't reach facilitator
+- Check ngrok is running and FACILITATOR_URL is correct
 
-4. **Optimizations**:
-   - Fastify's optimized JSON serialization
-   - Non-blocking async architecture
-   - Background polling doesn't block requests
-   - EIP-4337 bundled transactions
+**Workflow timeouts**
+- Check KRNL node status at https://node.krnl.xyz
+- Verify RPC endpoint and bundler/paymaster config
+- Ensure sufficient ETH for gas
 
-## Troubleshooting
+**Missing workflow in settle**
+- Server restarted (use Redis for persistence)
+- Payment nonce mismatch between verify/settle calls
 
-### KRNL Workflow Times Out
-**Symptom**: `/settle` falls back to standard settle after 30s wait
+### Testing
 
-**Solutions**:
-- Check KRNL node status
-- Verify RPC_URL is responsive
-- Check bundler/paymaster configuration
-- Review KRNL node logs
-
-### Workflow Not Found in /settle
-**Symptom**: "No KRNL workflow tracked" log message
-
-**Causes**:
-- Server restarted (in-memory Map cleared)
-- Different server instance (need Redis)
-- Payment nonce extraction failed
-
-**Solutions**:
-- Deploy Redis for persistent tracking
-- Check EVM payload format
-- Review verify logs for workflow ID
-
-### Background Polling Not Working
-**Symptom**: Workflow status stays "pending"
-
-**Check**:
-- KRNL_NODE_URL is accessible
-- `krnl_getWorkflowStatus` RPC method works
-- Check server logs for polling errors
-- Verify workflow ID is correct
-
-## Development Tips
-
-### Test KRNL Flow
 ```bash
-# 1. Enable KRNL and start server
-KRNL_ENABLED=true npm run dev
+# Test the facilitator endpoints
+curl https://YOUR_NGROK_URL/facilitator/supported
 
-# 2. Send verify request (returns immediately)
-curl -X POST http://localhost:3000/facilitator/verify \
-  -H "Content-Type: application/json" \
-  -d @test-payment.json
-
-# Response: { "isValid": true, "payer": "0x..." }
-
-# 3. Check logs for workflow ID
-# Output: "📝 Tracking workflow wf_abc123 for nonce 0x..."
-
-# 4. Wait 10 seconds for workflow to complete
-
-# 5. Send settle request
-curl -X POST http://localhost:3000/facilitator/settle \
-  -H "Content-Type: application/json" \
-  -d @test-payment.json
-
-# Response: { "success": true, "transaction": "0x..." }
+# Run test suite
+npm test
 ```
 
+---
 
+## 📄 License
 
-### Monitor Workflow Status
-```typescript
-// Add to your code
-import { getWorkflowByNonce } from './lib/workflow-store';
+MIT License - see [LICENSE](./LICENSE) for details.
 
-const workflow = getWorkflowByNonce(paymentNonce);
-console.log('Workflow status:', workflow?.status);
-console.log('Started at:', new Date(workflow?.startedAt || 0));
-```
+## 🤝 Contributing
 
-## License
+Contributions are welcome! Before opening a PR:
 
-MIT
+- **Read the architecture**: See [Architecture Overview](./ARCHITECTURE.md) for how the facilitator, KRNL workflows, test server, and EigenAI agent fit together.
+- **Run the core flows locally**:
+  - Facilitator: `npm run dev` (Fastify server on port 3000)
+  - Test resource server: `npm run test:server` (Express x402 seller on port 4000)
+  - Agent demo: `npm run test:client` (runs `eigenai-agent` as a CLI client)
+- **Add/change behavior in the right place**:
+  - Facilitator HTTP surface: `index.ts`, `facilitator/` handlers.
+  - KRNL + workflow logic: `middleware/krnl-x402.ts`, `lib/workflow-*.ts`, `lib/krnl-client.ts`.
+  - Client/EigenAI behavior: `eigenai-agent/` and `test/client-eoa-eip4337.ts`.
+- **Keep tests and examples working**:
+  - Update docs and examples if you change request/response shapes.
+  - Run `npm test` and the agent demo flow before submitting changes.
 
-## Contributing
-
-Contributions welcome! Please read [INTEGRATION_SUMMARY.md](./INTEGRATION_SUMMARY.md) for architecture details.
-
-## Questions?
+## 🔗 Links
 
 - **KRNL Protocol**: https://krnl.xyz
 - **x402 Standard**: https://github.com/x402-protocol/x402
-- **Issues**: Please open a GitHub issue
+- **Issues**: Open a GitHub issue for support

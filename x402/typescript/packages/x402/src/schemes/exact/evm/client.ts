@@ -68,15 +68,6 @@ export async function signPaymentHeader<transport extends Transport, chain exten
   const intentSignature = (client as any).intentSignature;
   const transactionIntent = (client as any).transactionIntent;
 
-  // Debug logging
-  console.log('[x402 client.ts] intentSignature:', intentSignature ? `${intentSignature.slice(0, 20)}...` : 'undefined');
-  console.log('[x402 client.ts] transactionIntent:', transactionIntent ? 'exists' : 'undefined');
-  if (transactionIntent) {
-    console.log('[x402 client.ts] transactionIntent.id:', transactionIntent.id);
-    console.log('[x402 client.ts] transactionIntent.delegate:', transactionIntent.delegate);
-    console.log('[x402 client.ts] transactionIntent.target:', transactionIntent.target);
-  }
-
   // Build flat KRNL fields for facilitator (only what's needed for DSL template)
   const krnlFields = transactionIntent && intentSignature ? {
     intentId: transactionIntent.id,
@@ -85,8 +76,6 @@ export async function signPaymentHeader<transport extends Transport, chain exten
     intentDelegate: transactionIntent.delegate,
     intentTarget: transactionIntent.target,
   } : {};
-  
-  console.log('[x402 client.ts] krnlFields:', krnlFields);
 
   return {
     ...unsignedPaymentHeader,
@@ -114,9 +103,6 @@ export async function createPayment<transport extends Transport, chain extends C
   // Check if client has smart account address override (for EIP-4337 smart accounts)
   const smartAccountAddress = (client as any).smartAccountAddress;
   const from = smartAccountAddress || (isSignerWallet(client) ? client.account!.address : client.address);
-  
-  console.log('[x402 client.ts] Payment from address:', from);
-  console.log('[x402 client.ts] Smart account override:', smartAccountAddress ? 'yes' : 'no');
   
   const unsignedPaymentHeader = preparePaymentHeader(from, x402Version, paymentRequirements);
   return signPaymentHeader(client, paymentRequirements, unsignedPaymentHeader);

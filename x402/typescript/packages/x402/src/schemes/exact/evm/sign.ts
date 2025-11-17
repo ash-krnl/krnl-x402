@@ -53,10 +53,6 @@ export async function signAuthorization<transport extends Transport, chain exten
     },
   };
 
-  console.log('[SIGN] Domain:', JSON.stringify(data.domain, null, 2));
-  console.log('[SIGN] Message:', JSON.stringify(data.message, null, 2));
-  console.log('[SIGN] Signer (from):', from);
-
   // Manually compute EIP-712 hash (for EIP-1271 smart contract wallet compatibility)
   const TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
     toHex('TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)')
@@ -100,14 +96,11 @@ export async function signAuthorization<transport extends Transport, chain exten
     )
   );
 
-  console.log('[SIGN] EIP-712 Hash:', eip712Hash);
-
   // Sign the raw EIP-712 hash with EIP-191 (for EIP-1271 compatibility)
   if (isSignerWallet(walletClient)) {
     const signature = await walletClient.signMessage({
       message: { raw: eip712Hash }
     });
-    console.log('[SIGN] Signature (EIP-191):', signature);
     return {
       signature,
     };
@@ -115,7 +108,6 @@ export async function signAuthorization<transport extends Transport, chain exten
     const signature = await walletClient.signMessage({
       message: { raw: eip712Hash }
     });
-    console.log('[SIGN] Signature (EIP-191):', signature);
     return {
       signature,
     };
