@@ -84,11 +84,6 @@ This implementation leverages **EIP-4337 (Account Abstraction)** to solve critic
 - **Test funds**: Base Sepolia ETH + USDC
 - **API Keys**: Pimlico bundler/paymaster for EIP-4337
 
-**For EigenAI Agent:**
-- **EigenAI API access** (sign up at eigencloud.xyz)
-- **Smart account setup** (uses KRNL EIP-4337 account factory)
-- **Wallet with private key** for signing intents
-
 ### Installation
 
 ```bash
@@ -161,7 +156,7 @@ See the [EigenAI Overview](https://docs.eigencloud.xyz/products/eigenai/concepts
 
 EigenAI is a verifiable AI inference network that lets you build applications on top of LLMs **without wondering if the same call will behave differently on each run**, or if prompts/models/responses are being modified in-flight. EigenAI offers:
 
-In this repository, EigenAI is the AI backend for the agent that understands monitors KRNL workflows, and decides when to call the when to access the content/data from the premium content server.
+In this repository, EigenAI is the AI client for the agent that understands monitors KRNL workflows, and decides when to call the when to access the content/data from the premium content server.
 
 ### Starting the Agent
 
