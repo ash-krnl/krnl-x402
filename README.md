@@ -1,6 +1,6 @@
-# KRNL-Enhanced X402 Facilitator with EigenAI Integration
+# KRNL-Enhanced X402 Facilitator 
 
-Next-generation x402 payment facilitator featuring **atomic verify+settle** workflows powered by KRNL Protocol and intelligent AI agent interactions through EigenAI.
+Next-generation x402 payment facilitator featuring **atomic verify+settle** workflows powered by KRNL Protocol.
 
 ## Contents
 
@@ -62,25 +62,14 @@ This implementation leverages **EIP-4337 (Account Abstraction)** to solve critic
 - Complex cross-chain state synchronization
 
 **EIP-4337 Multi-chain Benefits:**
-- ✅ **Same smart account across all EVM chains** - Deterministic addresses
 - ✅ **Unified interface** - One account abstraction standard works everywhere
 - ✅ **Chain-agnostic workflows** - KRNL workflows deploy identically on any EVM chain
 - ✅ **Out-of-the-box support** - Ethereum, Base, Optimism, Arbitrum, Polygon (any EVM chain)
-- ✅ **No per-chain configuration** - Single account factory works universally
-
-**Supported Networks:**
-```
-Ethereum Sepolia   │  Base Sepolia   │  Optimism Sepolia  │  Arbitrum Sepolia
-───────────────────┼─────────────────┼────────────────────┼──────────────────
-Same Account Addr  │  Same Account   │  Same Account      │  Same Account
-Same Workflow      │  Same Workflow  │  Same Workflow     │  Same Workflow
-```
 
 ## ✨ Features
 
 ### KRNL Facilitator
 - **Atomic Settlement**: KRNL workflow-powered verify+settle operations
-- **Multi-chain Support**: Ethereum, Base, Optimism, Arbitrum (Sepolia networks)
 - **EIP-4337 Integration**: Smart account wallets and gasless transactions
 - **Verifiable Workflows**: Each step cryptographically signed and traceable
 
